@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Happenv\FilamentModelSearch\Tests\Fixtures\Resources;
 
+use BackedEnum;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
@@ -14,6 +15,7 @@ use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\Edi
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ListOrders;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ViewOrder;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -58,6 +60,15 @@ final class OrderResource extends Resource
         }
 
         return config('fixtures.order_details_customer') === true ? $query->with('customer') : $query;
+    }
+
+    /**
+     * Tests give the resource an icon through `fixtures.order_icon`.
+     */
+    #[\Override]
+    public static function getNavigationIcon(): string|BackedEnum|Htmlable|null
+    {
+        return config('fixtures.order_icon') ?? parent::getNavigationIcon();
     }
 
     public static function table(Table $table): Table
