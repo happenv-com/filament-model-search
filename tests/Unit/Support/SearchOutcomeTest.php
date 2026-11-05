@@ -13,11 +13,6 @@ use Illuminate\Support\Arr;
 
 covers(SearchOutcome::class);
 
-function outcomeItems(): array
-{
-    return [(new ReflectionClass(SearchResult::class))->newInstanceWithoutConstructor()];
-}
-
 it('maps each core exception to its outcome', function (Throwable $exception, SearchOutcome $expected): void {
     expect(SearchOutcome::fromException($exception))->toBe($expected);
 })->with([
@@ -34,7 +29,7 @@ it('returns null for an unrelated exception', function (): void {
 it('derives the outcome from results by precedence', function (SearchResults $results, SearchOutcome $expected): void {
     expect(SearchOutcome::fromResults($results))->toBe($expected);
 })->with(function (): array {
-    $items = outcomeItems();
+    $items = [(new ReflectionClass(SearchResult::class))->newInstanceWithoutConstructor()];
 
     return [
         'timed out and building' => [new SearchResults([], true, null, true), SearchOutcome::TimedOut],
