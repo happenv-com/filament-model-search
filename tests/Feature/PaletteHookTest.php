@@ -29,7 +29,7 @@ it('opens the palette under the one modal id the trigger names', function (): vo
     $this->signIn(['orders.viewAny', 'orders.view']);
 
     // The trigger is a Blade component tag, where a directive such as @js stays literal text: the id must reach the browser.
-    expect((string) FilamentView::renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE))->toContain("{ id: '".RecordPalette::MODAL_ID."' }")->not->toContain('@js')
+    expect((string) FilamentView::renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE))->toContain('open-modal')->toContain(RecordPalette::MODAL_ID)->not->toContain('@js')
         ->and((string) FilamentView::renderHook(PanelsRenderHook::BODY_END))->toContain(RecordPalette::MODAL_ID);
 });
 

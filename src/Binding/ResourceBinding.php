@@ -173,15 +173,17 @@ final readonly class ResourceBinding
         $cache = null;
         $key = '';
         $cached = null;
+        $storeName = 'default';
 
         try {
             $connection = (new $this->modelClass)->getConnection();
             $key = sprintf('filament-model-search:ready:%s:%s:%s', $connection->getName(), $connection->getDatabaseName(), $this->modelClass);
             $store = config('model-search.cache_store');
+            $storeName = is_string($store) ? $store : 'default';
             $cache = Cache::store(is_string($store) ? $store : null);
             $cached = $cache->get($key);
         } catch (Throwable $e) {
-            resolve(FailureReports::class)->reportOnce('readiness-cache', $e);
+            resolve(FailureReports::class)->reportOnce('readiness-cache:'.$storeName, $e);
             $cache = null;
         }
 
@@ -195,7 +197,7 @@ final readonly class ResourceBinding
             try {
                 $cache->put($key, $ready, $seconds);
             } catch (Throwable $e) {
-                resolve(FailureReports::class)->reportOnce('readiness-cache', $e);
+                resolve(FailureReports::class)->reportOnce('readiness-cache:'.$storeName, $e);
             }
         }
 
