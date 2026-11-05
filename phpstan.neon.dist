@@ -7,5 +7,9 @@ parameters:
     paths:
         - src
         - config
-    tmpDir: build/phpstan
+        - phpstan
     checkOctaneCompatibility: true
+    bootstrapFiles:
+        - phpstan/bootstrap.php
+    stubFiles:
+        - phpstan/macroable.stub

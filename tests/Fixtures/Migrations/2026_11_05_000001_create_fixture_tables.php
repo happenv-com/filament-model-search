@@ -15,7 +15,19 @@ return new class extends Migration
             $table->text('name');
             $table->text('email')->unique();
             $table->text('password');
-            $table->boolean('can_view_any')->default(true);
+            $table->jsonb('abilities')->default('[]');
+            $table->timestampsTz(6);
+        });
+
+        Schema::create('customers', function (Blueprint $table): void {
+            $table->id();
+            $table->text('name')->nullable();
+            $table->text('email')->nullable();
+            $table->text('phone')->nullable();
+            $table->boolean('active')->default(true);
+            $table->text('code')->nullable();
+            $table->jsonb('data')->nullable();
+            $table->unsignedBigInteger('referrer_id')->nullable();
             $table->timestampsTz(6);
         });
 
@@ -25,18 +37,12 @@ return new class extends Migration
             $table->text('external_number')->nullable();
             $table->text('customer_email')->nullable();
             $table->text('customer_name')->nullable();
+            $table->foreignId('customer_id')->nullable()->constrained('customers')->nullOnDelete();
+            $table->text('customer_code')->nullable();
             $table->text('state')->default('unshipped');
             $table->timestampTz('purchased_at', 6)->nullable();
             $table->timestampsTz(6);
             $table->index('signature');
-        });
-
-        Schema::create('customers', function (Blueprint $table): void {
-            $table->id();
-            $table->text('name')->nullable();
-            $table->text('email')->nullable();
-            $table->text('phone')->nullable();
-            $table->timestampsTz(6);
         });
 
         Schema::create('products', function (Blueprint $table): void {
