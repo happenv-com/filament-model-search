@@ -36,7 +36,7 @@
     "require": {
         "php": "^8.4",
         "filament/filament": "^5.11",
-        "happenv-com/laravel-model-search": "^0.1",
+        "happenv-com/laravel-model-search": "^0.1 || ^0.2",
         "illuminate/contracts": "^13.0",
         "illuminate/database": "^13.0",
         "illuminate/support": "^13.0",
