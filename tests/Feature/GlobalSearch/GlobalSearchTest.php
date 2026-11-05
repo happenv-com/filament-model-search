@@ -7,14 +7,9 @@ use Happenv\FilamentModelSearch\Concerns\InteractsWithModelSearch;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\ProductResource;
-use Happenv\ModelSearch\Definition\CompiledDefinition;
-use Happenv\ModelSearch\Drivers\Driver;
-use Happenv\ModelSearch\Drivers\DriverManager;
-use Happenv\ModelSearch\Postgres\Query\PostgresDriver;
-use Happenv\ModelSearch\Query\SearchQuery;
-use Happenv\ModelSearch\Query\SearchResults;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
+use Happenv\ModelSearch\Postgres\Indexing\IndexState;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 covers(InteractsWithModelSearch::class);
@@ -166,33 +161,12 @@ it('shows found records whatever the flags of the answer say', function (): void
     $this->signIn(['orders.viewAny', 'orders.view']);
     $this->createOrder('OR6001', 'EXT-323232');
     $this->indexAll();
+    config(['filament-model-search.readiness_cache_seconds' => 60]);
 
-    // A driver that tells the index is still being built while it answers.
-    resolve(DriverManager::class)->extend('flagged', static fn (CompiledDefinition $definition): Driver => new class(new PostgresDriver($definition)) implements Driver
-    {
-        public function __construct(private readonly Driver $inner) {}
-
-        public function get(SearchQuery $query): SearchResults
-        {
-            return $this->inner->get($query)->whileIndexBuilding();
-        }
-
-        public function similar(SearchQuery $query): SearchResults
-        {
-            return $this->inner->similar($query);
-        }
-
-        public function apply(SearchQuery $query, Builder $tableQuery): Builder
-        {
-            return $this->inner->apply($query, $tableQuery);
-        }
-
-        public function candidates(SearchQuery $query): Collection
-        {
-            return $this->inner->candidates($query);
-        }
-    });
-    config(['model-search.driver' => 'flagged']);
-
+    // Readiness is remembered as ready; then the type is marked for a rebuild, which the core answers with flagged results.
     expect($this->globalTitles(OrderResource::class, 'EXT-323232'))->toBe(['OR6001']);
+    (new IndexState)->markForRebuild(['order']);
+
+    expect(OrderSearch::query('EXT-323232')->within(OrderResource::getGlobalSearchEloquentQuery())->forUser(null)->get()->indexBuilding)->toBeTrue()
+        ->and($this->globalTitles(OrderResource::class, 'EXT-323232'))->toBe(['OR6001']);
 });
