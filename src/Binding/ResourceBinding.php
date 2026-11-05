@@ -148,24 +148,36 @@ final readonly class ResourceBinding
             return ModelSearches::isReady($this->modelClass);
         }
 
-        // The cache is a convenience: when it fails, the core answers.
+        // The cache is a convenience: a failing store is reported once and the core answers.
+        $cache = null;
+        $key = '';
+        $cached = null;
+
         try {
             $connection = (new $this->modelClass)->getConnection();
             $key = sprintf('filament-model-search:ready:%s:%s:%s', $connection->getName(), $connection->getDatabaseName(), $this->modelClass);
             $store = config('model-search.cache_store');
             $cache = Cache::store(is_string($store) ? $store : null);
             $cached = $cache->get($key);
-
-            if (is_bool($cached)) {
-                return $cached;
-            }
-
-            $ready = ModelSearches::isReady($this->modelClass);
-            $cache->put($key, $ready, $seconds);
-
-            return $ready;
-        } catch (Throwable) {
-            return ModelSearches::isReady($this->modelClass);
+        } catch (Throwable $e) {
+            report($e);
+            $cache = null;
         }
+
+        if (is_bool($cached)) {
+            return $cached;
+        }
+
+        $ready = ModelSearches::isReady($this->modelClass);
+
+        if ($cache !== null) {
+            try {
+                $cache->put($key, $ready, $seconds);
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
+
+        return $ready;
     }
 }

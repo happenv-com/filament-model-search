@@ -18,8 +18,9 @@ use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\CustomerSearch;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
 use Happenv\ModelSearch\Postgres\Indexing\IndexState;
 use Happenv\ModelSearch\Registry\ModelSearchRegistry;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 
 covers(ResourceBindings::class, ResourceBinding::class);
@@ -238,16 +239,45 @@ it('answers from the core when the cache store fails', function (): void {
     expect(binding(OrderSearch::class, OrderResource::class)->isReady())->toBeFalse();
 });
 
-it('keeps readiness apart per connection', function (): void {
-    config(['database.connections.tenant_b' => config('database.connections.pgsql')]);
+it('keeps readiness apart per database on one connection', function (): void {
+    $name = config('database.connections.pgsql.database').'_b';
+    $maintenance = [...config('database.connections.pgsql'), 'database' => 'postgres'];
+    config(['database.connections.maintenance' => $maintenance]);
+    $pdo = DB::connection('maintenance')->getPdo();
+    $pdo->exec(sprintf('DROP DATABASE IF EXISTS "%s"', $name));
+    $pdo->exec(sprintf('CREATE DATABASE "%s"', $name));
+
+    $original = config('database.connections.pgsql.database');
     $binding = binding(OrderSearch::class, OrderResource::class);
-    $connection = Order::query()->getConnection();
 
-    // The default connection remembers "ready"; a connection of another name must not read that.
-    Cache::put(sprintf('filament-model-search:ready:%s:%s:%s', $connection->getName(), $connection->getDatabaseName(), Order::class), true, 60);
+    try {
+        // Database A: installed and indexed.
+        Order::query()->create(['signature' => 'OR9009']);
+        $this->indexAll();
+        expect($binding->isReady())->toBeTrue();
 
-    expect($binding->isReady())->toBeTrue();
+        // A tenancy switch: the same connection, another database, set up but never indexed.
+        config(['database.connections.pgsql.database' => $name]);
+        DB::purge('pgsql');
+        DB::statement('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+        $this->artisan('migrate', ['--force' => true])->assertSuccessful();
 
-    config(['database.default' => 'tenant_b']);
-    expect($binding->isReady())->toBeFalse();
+        expect($binding->isReady())->toBeFalse();
+    } finally {
+        config(['database.connections.pgsql.database' => $original]);
+        DB::purge('pgsql');
+        $pdo->exec(sprintf('DROP DATABASE IF EXISTS "%s" WITH (FORCE)', $name));
+        DB::purge('maintenance');
+    }
+});
+
+it('reports a failing cache store once and still answers from the core', function (): void {
+    config(['model-search.cache_store' => 'no-such-store']);
+    $reported = [];
+    $this->app->make(ExceptionHandler::class)->reportable(function (Throwable $e) use (&$reported): void {
+        $reported[] = $e;
+    });
+
+    expect(binding(OrderSearch::class, OrderResource::class)->isReady())->toBeFalse()
+        ->and($reported)->toHaveCount(1);
 });
