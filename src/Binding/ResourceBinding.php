@@ -129,6 +129,16 @@ final readonly class ResourceBinding
         return $icon instanceof Htmlable ? null : $icon;
     }
 
+    /**
+     * The plural name of what the resource lists, for a heading.
+     */
+    public function label(): string
+    {
+        $resource = $this->resourceClass;
+
+        return $resource::getPluralModelLabel();
+    }
+
     public function sort(): int
     {
         $resource = $this->resourceClass;

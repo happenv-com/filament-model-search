@@ -44,10 +44,18 @@ final class OrderResource extends Resource
             : [];
     }
 
+    /**
+     * Tests narrow what the resource offers through `fixtures.order_scope`.
+     */
     #[\Override]
     public static function getGlobalSearchEloquentQuery(): Builder
     {
         $query = parent::getGlobalSearchEloquentQuery();
+        $narrow = config('fixtures.order_scope');
+
+        if (is_callable($narrow)) {
+            $query = $narrow($query);
+        }
 
         return config('fixtures.order_details_customer') === true ? $query->with('customer') : $query;
     }

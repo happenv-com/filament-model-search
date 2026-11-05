@@ -9,6 +9,7 @@ use Filament\Facades\Filament;
 use Filament\GlobalSearch\GlobalSearchResult;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\Support\HostScope;
+use Happenv\FilamentModelSearch\Support\MatchLine;
 use Happenv\FilamentModelSearch\Support\ReadySearch;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Illuminate\Contracts\Support\Htmlable;
@@ -95,12 +96,11 @@ trait InteractsWithModelSearch
             $details = static::getGlobalSearchResultDetails($record);
             $match = $result->match;
 
-            if ($match->value === null) {
-                // The viewer may not see the value: what matched is still told, the value is not.
-                $details[trans('filament-model-search::interacts-with-model-search.matched_by')] ??= $match->label;
-            } elseif ($match->value !== ($title instanceof Htmlable ? strip_tags($title->toHtml()) : $title)) {
-                // A value equal to the title adds nothing, and a native detail of the same name stays.
-                $details[$match->label] ??= $match->value;
+            // What matched is told; a native detail of the same name stays.
+            $line = MatchLine::of($match, $title instanceof Htmlable ? strip_tags($title->toHtml()) : $title);
+
+            if ($line !== null) {
+                $details[$line[0]] ??= $line[1];
             }
 
             $global->push(new GlobalSearchResult(

@@ -53,7 +53,7 @@ it('shows what matched and hides a value the viewer may not see', function (): v
     $hidden = CustomerResource::getGlobalSearchResults('alice@example.test');
 
     expect($hidden)->toHaveCount(1)
-        ->and($hidden->first()->details)->toBe([trans('filament-model-search::interacts-with-model-search.matched_by') => 'Email'])
+        ->and($hidden->first()->details)->toBe([trans('filament-model-search::match-line.matched_by') => 'Email'])
         ->and(json_encode($hidden->first()))->not->toContain('alice@example.test');
 
     // The same process, another viewer: the value follows the viewer, not the first search.

@@ -9,5 +9,7 @@ parameters:
         - config
         - phpstan
     checkOctaneCompatibility: true
+    bootstrapFiles:
+        - phpstan/bootstrap.php
     stubFiles:
         - phpstan/macroable.stub
