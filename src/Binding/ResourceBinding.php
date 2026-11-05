@@ -139,6 +139,16 @@ final readonly class ResourceBinding
         return $resource::getPluralModelLabel();
     }
 
+    /**
+     * The singular name of what the resource lists.
+     */
+    public function modelLabel(): string
+    {
+        $resource = $this->resourceClass;
+
+        return $resource::getModelLabel();
+    }
+
     public function sort(): int
     {
         $resource = $this->resourceClass;

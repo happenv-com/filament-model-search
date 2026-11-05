@@ -40,7 +40,7 @@ A modal that searches every resource listed in the plugin at once (one `SearchQu
 - Groups follow the navigation order of the resources, except that a group holding an exact hit comes first; at most `palette.per_group` (5) records each. Each record shows the resource's own title, icon and url, and what matched (the value only when the core lets the viewer see it).
 - A record found through a related one (a `via` field) is found only if the user may also open the related resource: the parent's scope is the one of its resource, filled in by the palette. Otherwise nothing is found through it.
 - Enter opens the record when exactly one hit of the whole palette is an exact one.
-- "Search all" shows when the answer came from a stage; "Search for similar" (also `mod+enter` in the modal) shows for a phrase with letters that is not shaped like an identifier, while the groups are not full. Similar names are never searched unless the user asks.
+- "Search all" shows when the answer came from a stage; "Search for similar" (also `mod+enter` in the modal) shows for a phrase with letters that is not shaped like an identifier, while the groups are not full. Similar names are never searched unless the user asks; the run is one `similar()` per resource, each rate-limited on its own, so a limit hit on a later resource drops the results of the whole run.
 - A search that timed out, an index that is still building and an empty answer are different states. Records that came back are shown whatever the flags say, with a notice.
 - Access is checked on every search and again when a record is opened. What was found is kept in a locked property: the browser can read it, not change it.
 - The phrase is never logged, and the palette adds nothing of it to a query.

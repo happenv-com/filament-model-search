@@ -23,6 +23,7 @@ beforeEach(function (): void {
         'filament-model-search.readiness_cache_seconds' => 0,
         'fixtures.customer_scope' => null,
         'fixtures.order_scope' => null,
+        'fixtures.customer_label' => null,
         'fixtures.order_details_customer' => null,
     ]);
 });
@@ -316,7 +317,7 @@ it('follows a parent only through the scope of its own resource', function (): v
     $orderGroup = collect($found['groups'])->firstWhere('type', 'order');
 
     expect($orderGroup['items'][0]['title'])->toBe('OR-CHILD')
-        ->and($orderGroup['items'][0]['hint']['label'])->toContain('Customer');
+        ->and($orderGroup['items'][0]['hint'])->toBe(['label' => trans('filament-model-search::match-line.matched_by'), 'value' => 'Customer']);
 });
 
 it('keeps the phrase out of query listeners and logs', function (): void {
@@ -337,4 +338,72 @@ it('keeps the phrase out of query listeners and logs', function (): void {
 
     expect($seen)->not->toBe([])
         ->and(implode("\n", $seen))->not->toContain($phrase);
+});
+
+it('binds Enter to the search input only, so links and buttons keep their own', function (): void {
+    $this->signIn(ALL_ABILITIES);
+
+    $html = Livewire::test(RecordPalette::class)->html();
+
+    expect(substr_count($html, 'keydown.enter'))->toBe(1)
+        ->and($html)->toMatch('/<input[^>]*x-on:keydown\.enter="submitOnEnter\(\$event\)"/s')
+        ->and($html)->toContain('event.isComposing')
+        ->and($html)->not->toContain('<x-')
+        ->and($html)->toContain(e(trans('filament-model-search::record-palette.placeholder')));
+});
+
+it('rejects a client that sets the flags only the server may set', function (string $flag): void {
+    $this->signIn(ALL_ABILITIES);
+    $component = Livewire::test(RecordPalette::class)->set('phrase', 'abc');
+
+    expect(fn () => $component->set($flag, true))->toThrow(Exception::class, "Cannot update locked property: [{$flag}]");
+})->with(['similar', 'everyStage']);
+
+it('starts the stages over with a new phrase', function (): void {
+    $this->signIn(ALL_ABILITIES);
+    $this->createOrder('OR-OPEN', '525252-A');
+    $this->createOrder('OR-SHIPPED', '525252-B', ['state' => 'shipped']);
+    $this->indexAll();
+
+    $component = Livewire::test(RecordPalette::class)->set('phrase', '525252')->call('searchEveryStage')->assertSet('everyStage', true);
+
+    // The answer "this came from a stage" belongs to the phrase: a new one is searched in the stage again.
+    $component->set('phrase', '525252-')->assertSet('everyStage', false)
+        ->assertSee(trans('filament-model-search::record-palette.search_every_stage'))
+        ->assertSee(trans('filament-model-search::record-palette.stage_note'));
+});
+
+it('names the parent through the label of its resource, localised', function (): void {
+    config(['fixtures.customer_label' => 'Klient']);
+    $customer = $this->createCustomer('Hidden Parent', 'hidden.parent@a.test');
+    $this->createOrder('OR-VIA', null, ['customer_id' => $customer->getKey()]);
+    $this->indexAll();
+
+    $this->signIn(ALL_ABILITIES);
+    $found = Livewire::test(RecordPalette::class)->set('phrase', 'hidden.parent@a.test')->get('found');
+    $order = collect($found['groups'])->firstWhere('type', 'order')['items'][0];
+
+    expect($order['hint'])->toBe(['label' => trans('filament-model-search::match-line.matched_by'), 'value' => 'Klient']);
+});
+
+it('shows the rate-limited state', function (): void {
+    $this->signIn(ALL_ABILITIES);
+    $this->createOrder('OR-RATE', '616161-A');
+    $this->indexAll();
+    config(['model-search.rate_limit.max_attempts' => 1]);
+
+    Livewire::test(RecordPalette::class)->set('phrase', '616161')->set('phrase', '616162')
+        ->assertSee(trans(SearchOutcome::RateLimited->heading()))
+        ->assertDontSee(trans(SearchOutcome::Empty->heading()));
+});
+
+it('shows the unavailable state when the server could log the phrase', function (): void {
+    $this->signIn(ALL_ABILITIES);
+    $this->createOrder('OR-PRIV', '717171-A');
+    $this->indexAll();
+    DB::statement("SET log_statement = 'all'");
+
+    Livewire::test(RecordPalette::class)->set('phrase', '717171')
+        ->assertSee(trans(SearchOutcome::Unavailable->heading()))
+        ->assertDontSee(trans(SearchOutcome::Empty->heading()));
 });

@@ -48,6 +48,14 @@ final class CustomerResource extends Resource
         return is_callable($narrow) ? $narrow($query) : $query;
     }
 
+    #[\Override]
+    public static function getModelLabel(): string
+    {
+        $label = config('fixtures.customer_label');
+
+        return is_string($label) ? $label : parent::getModelLabel();
+    }
+
     public static function table(Table $table): Table
     {
         return $table->columns([

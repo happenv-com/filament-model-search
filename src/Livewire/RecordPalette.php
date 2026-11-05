@@ -19,6 +19,7 @@ use Happenv\ModelSearch\Query\SearchResults;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Isolate;
 use Livewire\Attributes\Locked;
@@ -45,8 +46,10 @@ final class RecordPalette extends Component
 
     public string $phrase = '';
 
+    #[Locked]
     public bool $everyStage = false;
 
+    #[Locked]
     public bool $similar = false;
 
     /** @var PaletteFound */
@@ -64,7 +67,9 @@ final class RecordPalette extends Component
     public function updatedPhrase(): void
     {
         // A new phrase starts over: similar names are asked for, never carried along.
+        // "Results came from a stage" is an answer to this phrase: it starts over with it.
         $this->similar = false;
+        $this->everyStage = false;
         $this->search();
     }
 
@@ -313,18 +318,15 @@ final class RecordPalette extends Component
 
             $title = $binding->title($result->model);
             $title = $title instanceof Htmlable ? strip_tags($title->toHtml()) : $title;
-            $line = MatchLine::of($result->match, $title);
-            $via = $result->match->via;
+            $relation = $result->match->via === null ? null : $this->relationLabel($result->model, $result->match->via);
+            $line = MatchLine::of($result->match, $title, $relation);
 
             $items[] = [
                 'id' => (string) $result->model->getKey(),
                 'title' => $title,
                 'url' => $url,
                 'exact' => $result->match->mode === Mode::Exact,
-                'hint' => $line === null ? null : [
-                    'label' => $via === null ? $line[0] : Str::headline($via).' › '.$line[0],
-                    'value' => $line[1],
-                ],
+                'hint' => $line === null ? null : ['label' => $line[0], 'value' => $line[1]],
             ];
         }
 
@@ -336,6 +338,22 @@ final class RecordPalette extends Component
             'icon' => $icon instanceof BackedEnum ? (string) $icon->value : $icon,
             'items' => $items,
         ];
+    }
+
+    /**
+     * What the relation is called to the user: the label of the resource that shows the related model,
+     * else the relation's own name.
+     */
+    private function relationLabel(Model $model, string $relation): string
+    {
+        try {
+            $related = $model->{$relation}();
+            $parent = $related instanceof Relation ? resolve(ResourceBindings::class)->for($related->getRelated()::class) : null;
+        } catch (Throwable) {
+            $parent = null;
+        }
+
+        return $parent instanceof ResourceBinding ? Str::ucfirst($parent->modelLabel()) : Str::headline($relation);
     }
 
     private function isFound(string $type, string $id): bool

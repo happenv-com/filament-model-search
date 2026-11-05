@@ -1,4 +1,12 @@
-<div x-data>
+<div
+    x-data="{
+        submitOnEnter(event) {
+            if (event.isComposing || event.ctrlKey || event.metaKey) return
+            event.preventDefault()
+            $wire.submit()
+        },
+    }"
+>
     @foreach ($keyBindings as $keyBinding)
         <span x-mousetrap.global.{{ $keyBinding }}="$dispatch('open-modal', { id: 'filament-model-search-record-palette' })" hidden></span>
     @endforeach
@@ -11,16 +19,17 @@
     >
         <div
             x-mousetrap.global.mod-enter="if (isOpen) $wire.searchSimilar()"
-            x-on:keydown.enter="if (! $event.ctrlKey && ! $event.metaKey) { $event.preventDefault(); $wire.submit() }"
             style="display: grid; gap: 0.75rem"
         >
             <x-filament::input.wrapper :prefix-icon="\Filament\Support\Icons\Heroicon::MagnifyingGlass" inline-prefix>
-                <x-filament::input
+                <input
                     type="search"
                     maxlength="1000"
                     autocomplete="off"
-                    :placeholder="__('filament-model-search::record-palette.placeholder')"
+                    placeholder="{{ __('filament-model-search::record-palette.placeholder') }}"
                     wire:model.live.debounce.{{ $debounce }}ms="phrase"
+                    x-on:keydown.enter="submitOnEnter($event)"
+                    class="fi-input fi-input-has-inline-prefix"
                 />
             </x-filament::input.wrapper>
 
@@ -86,6 +95,7 @@
                         <x-filament::link tag="button" type="button" wire:click="searchEveryStage">
                             {{ __('filament-model-search::record-palette.search_every_stage') }}
                         </x-filament::link>
+                        <span style="font-size: 0.875rem; opacity: 0.7">{{ __('filament-model-search::record-palette.stage_note') }}</span>
                     @endif
 
                     @if ($offersSimilar)

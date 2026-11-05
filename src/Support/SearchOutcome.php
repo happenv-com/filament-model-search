@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Happenv\FilamentModelSearch\Support;
 
 use Happenv\ModelSearch\Exceptions\SearchIndexNotReady;
+use Happenv\ModelSearch\Exceptions\SearchPrivacyUnavailable;
 use Happenv\ModelSearch\Exceptions\SearchRateLimited;
 use Happenv\ModelSearch\Exceptions\SearchTimedOut;
 use Happenv\ModelSearch\Exceptions\SearchTooBroad;
@@ -44,6 +45,7 @@ enum SearchOutcome: string
             $exception instanceof SearchTooBroad => self::TooBroad,
             $exception instanceof SearchIndexNotReady => self::IndexBuilding,
             $exception instanceof SearchRateLimited => self::RateLimited,
+            $exception instanceof SearchPrivacyUnavailable => self::Unavailable,
             default => null,
         };
     }

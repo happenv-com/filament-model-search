@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Happenv\ModelSearch\Exceptions\SearchIndexNotReady;
+use Happenv\ModelSearch\Exceptions\SearchPrivacyUnavailable;
 use Happenv\ModelSearch\Exceptions\SearchRateLimited;
 use Happenv\ModelSearch\Exceptions\SearchTimedOut;
 use Happenv\ModelSearch\Exceptions\SearchTooBroad;
@@ -20,6 +21,7 @@ it('maps each core exception to its outcome', function (Throwable $exception, Se
     'too broad' => [fn () => new SearchTooBroad, SearchOutcome::TooBroad],
     'index not ready' => [fn () => new SearchIndexNotReady, SearchOutcome::IndexBuilding],
     'rate limited' => [fn () => new SearchRateLimited(5), SearchOutcome::RateLimited],
+    'privacy unavailable' => [fn () => new SearchPrivacyUnavailable(['log_statement']), SearchOutcome::Unavailable],
 ]);
 
 it('returns null for an unrelated exception', function (): void {

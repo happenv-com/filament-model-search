@@ -19,3 +19,8 @@ it('tells the label alone when the value is hidden', function (): void {
 it('adds nothing when the value is the title', function (): void {
     expect(MatchLine::of(new SearchMatch('name', 'Name', 'Alice', Mode::Prefix), 'Alice'))->toBeNull();
 });
+
+it('names the relation of a match found through a related record', function (): void {
+    expect(MatchLine::of(new SearchMatch('customer', 'Customer', null, Mode::Exact, null, 'customer'), 'OR-1', 'Klient'))->toBe([trans('filament-model-search::match-line.matched_by'), 'Klient'])
+        ->and(MatchLine::of(new SearchMatch('email', 'Email', 'a@b.test', Mode::Exact, null, 'customer'), 'OR-1', 'Klient'))->toBe(['Klient › Email', 'a@b.test']);
+});
