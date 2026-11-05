@@ -7,6 +7,7 @@ namespace Happenv\FilamentModelSearch;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\Forms\SelectModelSearch;
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
+use Happenv\FilamentModelSearch\Support\FailureReports;
 use Happenv\FilamentModelSearch\Tables\SelectFilterModelSearch;
 use Happenv\FilamentModelSearch\Tables\TableModelSearch;
 use Illuminate\Support\ServiceProvider;
@@ -20,6 +21,7 @@ final class FilamentModelSearchServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/filament-model-search.php', 'filament-model-search');
 
         $this->app->singleton(ResourceBindings::class);
+        $this->app->singleton(FailureReports::class);
     }
 
     public function boot(): void

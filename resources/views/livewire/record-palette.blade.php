@@ -8,11 +8,11 @@
     }"
 >
     @foreach ($keyBindings as $keyBinding)
-        <span x-mousetrap.global.{{ $keyBinding }}="$dispatch('open-modal', { id: 'filament-model-search-record-palette' })" hidden></span>
+        <span x-mousetrap.global.{{ $keyBinding }}="$dispatch('open-modal', { id: @js(\Happenv\FilamentModelSearch\Livewire\RecordPalette::MODAL_ID) })" hidden></span>
     @endforeach
 
     <x-filament::modal
-        id="filament-model-search-record-palette"
+        :id="\Happenv\FilamentModelSearch\Livewire\RecordPalette::MODAL_ID"
         width="2xl"
         :close-button="false"
         :aria-label="__('filament-model-search::record-palette.title')"
@@ -27,6 +27,7 @@
                     maxlength="1000"
                     autocomplete="off"
                     placeholder="{{ __('filament-model-search::record-palette.placeholder') }}"
+                    aria-label="{{ __('filament-model-search::record-palette.search_label') }}"
                     wire:model.live.debounce.{{ $debounce }}ms="phrase"
                     x-on:keydown.enter="submitOnEnter($event)"
                     class="fi-input fi-input-has-inline-prefix"

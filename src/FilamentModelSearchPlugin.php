@@ -8,7 +8,7 @@ use Filament\Contracts\Plugin;
 use Filament\Panel;
 use Filament\View\PanelsRenderHook;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
-use Illuminate\Support\Facades\Blade;
+use Happenv\FilamentModelSearch\Livewire\RecordPalette;
 
 /**
  * Registers the model search on a panel.
@@ -19,8 +19,6 @@ use Illuminate\Support\Facades\Blade;
 final class FilamentModelSearchPlugin implements Plugin
 {
     public const string PALETTE_COMPONENT = 'filament-model-search.record-palette';
-
-    private const string PALETTE_MODAL_ID = 'filament-model-search-record-palette';
 
     /** @var list<class-string> */
     private array $resources = [];
@@ -88,10 +86,10 @@ final class FilamentModelSearchPlugin implements Plugin
 
         // Always hooked, decided when the page renders: the user, the config and the bindings may all differ from the boot.
         $panel->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): string => $this->paletteIsOffered()
-            ? view('filament-model-search::components.palette-trigger', ['modalId' => self::PALETTE_MODAL_ID])->render()
+            ? view('filament-model-search::components.palette-trigger', ['modalId' => RecordPalette::MODAL_ID])->render()
             : '');
         $panel->renderHook(PanelsRenderHook::BODY_END, fn (): string => $this->paletteIsOffered()
-            ? Blade::render('@livewire($component)', ['component' => self::PALETTE_COMPONENT])
+            ? view('filament-model-search::components.palette', ['component' => self::PALETTE_COMPONENT])->render()
             : '');
     }
 

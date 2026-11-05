@@ -224,6 +224,37 @@ it('reports a failing cache store once and still answers from the core', functio
         ->and($reported)->toHaveCount(1);
 });
 
+it('reports a failing cache store once per process, not on every check', function (): void {
+    config(['model-search.cache_store' => 'no-such-store']);
+    $reported = [];
+    $this->app->make(ExceptionHandler::class)->reportable(function (Throwable $e) use (&$reported): void {
+        $reported[] = $e;
+    });
+
+    $binding = $this->bindingOf(OrderSearch::class, OrderResource::class);
+    $binding->isReady();
+    $binding->isReady();
+    $this->bindingOf(OrderSearch::class, OrderResource::class)->isReady();
+
+    expect($reported)->toHaveCount(1);
+});
+
+it('reports each failing cache store once', function (): void {
+    $reported = [];
+    $this->app->make(ExceptionHandler::class)->reportable(function (Throwable $e) use (&$reported): void {
+        $reported[] = $e;
+    });
+    $binding = $this->bindingOf(OrderSearch::class, OrderResource::class);
+
+    config(['model-search.cache_store' => 'no-such-store']);
+    $binding->isReady();
+    $binding->isReady();
+    config(['model-search.cache_store' => 'another-missing-store']);
+    $binding->isReady();
+
+    expect($reported)->toHaveCount(2);
+});
+
 it('refuses a resource whose own global search hides the one of the trait', function (): void {
     expect(fn () => new ResourceBindings()->registerResource(ShadowingOrderResource::class))
         ->toThrow(LogicException::class, 'defines its own getGlobalSearchResults()');
