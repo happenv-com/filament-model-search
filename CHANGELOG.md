@@ -2,6 +2,14 @@
 
 All notable changes to `filament-model-search` will be documented in this file.
 
+## v0.1.3 - 2026-11-05
+
+### What's Changed
+
+* fix: render scalable icon enums as navigation icons in the record palette by @webard in https://github.com/happenv-com/filament-model-search/pull/4
+
+**Full Changelog**: https://github.com/happenv-com/filament-model-search/compare/v0.1.2...v0.1.3
+
 ## v0.1.2 - 2026-11-05
 
 ### What's Changed
