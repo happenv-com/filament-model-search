@@ -6,28 +6,37 @@ namespace Happenv\FilamentModelSearch\Tests;
 
 use BladeUI\Heroicons\BladeHeroiconsServiceProvider;
 use BladeUI\Icons\BladeIconsServiceProvider;
+use Closure;
 use Filament\Actions\ActionsServiceProvider;
 use Filament\Facades\Filament;
 use Filament\FilamentServiceProvider;
+use Filament\Forms\Components\Select;
 use Filament\Forms\FormsServiceProvider;
 use Filament\Infolists\InfolistsServiceProvider;
 use Filament\Notifications\NotificationsServiceProvider;
 use Filament\Schemas\SchemasServiceProvider;
 use Filament\Support\SupportServiceProvider;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
 use Filament\Tables\TablesServiceProvider;
 use Filament\Widgets\WidgetsServiceProvider;
 use Happenv\FilamentModelSearch\FilamentModelSearchServiceProvider;
 use Happenv\FilamentModelSearch\Tests\Fixtures\AdminPanelProvider;
 use Happenv\FilamentModelSearch\Tests\Fixtures\FixtureSearchServiceProvider;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Livewire\OrderForm;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Customer;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\User;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ListOrders;
 use Happenv\ModelSearch\ModelSearchServiceProvider;
 use Happenv\ModelSearch\Postgres\Indexing\IndexState;
 use Happenv\ModelSearch\Postgres\Indexing\SearchIndexer;
 use Happenv\ModelSearch\Registry\ModelSearchRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 use Livewire\LivewireServiceProvider;
+use LogicException;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
@@ -68,6 +77,51 @@ abstract class TestCase extends Orchestra
     protected function createOrder(string $signature, ?string $external = null, array $extra = []): Order
     {
         return Order::query()->create(['signature' => $signature, 'external_number' => $external, ...$extra]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     */
+    protected function createCustomer(string $name, ?string $email = null, ?string $phone = null, array $extra = []): Customer
+    {
+        return Customer::query()->create(['name' => $name, 'email' => $email, 'phone' => $phone, ...$extra]);
+    }
+
+    /**
+     * The customer select of the fixture order form, shaped through `fixtures.customer_select`.
+     */
+    protected function customerSelect(): Select
+    {
+        $component = Livewire::test(OrderForm::class)->instance();
+        $select = $component->getSchema('form')?->getComponent('customer_id');
+
+        assert($select instanceof Select);
+
+        return $select;
+    }
+
+    /**
+     * Lists the orders with a customer filter and returns the select that filter renders.
+     *
+     * @param  Closure(SelectFilter): SelectFilter|null  $shape  Receives the bare filter; defaults to a searchable relationship filter with `modelSearch()`.
+     */
+    protected function customerFilterSelect(?Closure $shape = null): Select
+    {
+        config(['fixtures.order_table' => static fn (Table $table): Table => $table->filters([
+            $shape instanceof Closure
+                ? $shape(SelectFilter::make('customer_id'))
+                : SelectFilter::make('customer_id')->relationship('customer', 'name')->searchable()->modelSearch(),
+        ])]);
+
+        $form = Livewire::test(ListOrders::class)->instance()->getTableFiltersForm();
+
+        foreach ($form->getFlatComponents(withHidden: true) as $component) {
+            if ($component instanceof Select) {
+                return $component;
+            }
+        }
+
+        throw new LogicException('The filter rendered no select.');
     }
 
     /**

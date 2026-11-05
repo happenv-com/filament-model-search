@@ -24,6 +24,7 @@ return new class extends Migration
             $table->text('name')->nullable();
             $table->text('email')->nullable();
             $table->text('phone')->nullable();
+            $table->boolean('active')->default(true);
             $table->timestampsTz(6);
         });
 

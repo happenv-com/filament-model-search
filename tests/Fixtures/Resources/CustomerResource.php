@@ -14,6 +14,7 @@ use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Customer;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource\Pages\EditCustomer;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource\Pages\ListCustomers;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\CustomerSearch;
+use Illuminate\Database\Eloquent\Builder;
 
 final class CustomerResource extends Resource
 {
@@ -31,6 +32,20 @@ final class CustomerResource extends Resource
     public static function modelSearch(): string
     {
         return CustomerSearch::class;
+    }
+
+    /**
+     * Tests narrow what the resource offers through `fixtures.customer_scope`.
+     *
+     * @return Builder<Customer>
+     */
+    #[\Override]
+    public static function getGlobalSearchEloquentQuery(): Builder
+    {
+        $query = parent::getGlobalSearchEloquentQuery();
+        $narrow = config('fixtures.customer_scope');
+
+        return is_callable($narrow) ? $narrow($query) : $query;
     }
 
     public static function table(Table $table): Table

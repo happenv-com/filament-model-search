@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Happenv\FilamentModelSearch;
 
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
+use Happenv\FilamentModelSearch\Forms\SelectModelSearch;
+use Happenv\FilamentModelSearch\Tables\SelectFilterModelSearch;
 use Happenv\FilamentModelSearch\Tables\TableModelSearch;
 use Illuminate\Support\ServiceProvider;
 
@@ -21,6 +23,8 @@ final class FilamentModelSearchServiceProvider extends ServiceProvider
     public function boot(): void
     {
         new TableModelSearch()->register();
+        new SelectModelSearch()->register();
+        new SelectFilterModelSearch()->register();
 
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'filament-model-search');
 

@@ -6,10 +6,10 @@ namespace Happenv\FilamentModelSearch\Tables;
 
 use Filament\Facades\Filament;
 use Filament\Tables\Table;
-use Happenv\FilamentModelSearch\Binding\ResourceBindings;
+use Happenv\FilamentModelSearch\Support\HostScope;
+use Happenv\FilamentModelSearch\Support\ReadySearch;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Happenv\ModelSearch\Definition\ModelSearch;
-use Happenv\ModelSearch\Facades\ModelSearches;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -97,19 +97,7 @@ final class TableModelSearch
             return null;
         }
 
-        /** @var class-string<Model> $model */
-        $binding = resolve(ResourceBindings::class)->for($model);
-        $searchClass ??= $binding?->searchClass();
-
-        if ($searchClass === null || ! is_subclass_of($searchClass, ModelSearch::class)) {
-            return null;
-        }
-
-        $ready = $binding !== null && $binding->searchClass() === $searchClass
-            ? $binding->isReady()
-            : ModelSearches::isReady($model);
-
-        return $ready ? $searchClass : null;
+        return ReadySearch::for($model, $searchClass);
     }
 
     /**
@@ -121,11 +109,8 @@ final class TableModelSearch
     {
         $state->record(null);
 
-        // The core snapshots what it is given, so the scope never sees the narrowing; an ordering has no meaning in a scope.
-        // Its columns are reset too: a select (withCount, addSelect) changes what a row carries, not which rows are in scope.
-        $scope = $query->clone()->reorder();
-        $scope->getQuery()->columns = null;
-        $scope->getQuery()->setBindings([], 'select');
+        // The core snapshots what it is given, so the scope never sees the narrowing.
+        $scope = HostScope::of($query);
 
         $request = $searchClass::query($search)
             ->within($scope)
