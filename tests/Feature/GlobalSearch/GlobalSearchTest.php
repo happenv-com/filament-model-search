@@ -7,7 +7,14 @@ use Happenv\FilamentModelSearch\Concerns\InteractsWithModelSearch;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\ProductResource;
+use Happenv\ModelSearch\Definition\CompiledDefinition;
+use Happenv\ModelSearch\Drivers\Driver;
+use Happenv\ModelSearch\Drivers\DriverManager;
+use Happenv\ModelSearch\Postgres\Query\PostgresDriver;
+use Happenv\ModelSearch\Query\SearchQuery;
+use Happenv\ModelSearch\Query\SearchResults;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 covers(InteractsWithModelSearch::class);
@@ -51,7 +58,8 @@ it('shows what matched and hides a value the viewer may not see', function (): v
     $hidden = CustomerResource::getGlobalSearchResults('alice@example.test');
 
     expect($hidden)->toHaveCount(1)
-        ->and($hidden->first()->details)->toBe([]);
+        ->and($hidden->first()->details)->toBe([trans('filament-model-search::global-search.matched_by') => 'Email'])
+        ->and(json_encode($hidden->first()))->not->toContain('alice@example.test');
 
     // The same process, another viewer: the value follows the viewer, not the first search.
     $this->signIn(['customers.viewAny', 'customers.update', 'customers.revealEmail']);
@@ -66,6 +74,8 @@ it('respects the resource global search query, orWhere included', function (): v
     $this->createCustomer('Quinn Inside', 'quinn.inside@a.test');
     $this->createCustomer('Quinn Outside', 'quinn.outside@a.test');
     $this->createCustomer('Rita Unrelated', 'rita@a.test', 'P9', ['active' => false]);
+    // Satisfies the first branch of the scope, does not match the phrase: it must not come back either.
+    $this->createCustomer('Zoe Other', 'zoe@a.test');
     $this->indexAll();
 
     // The phone branch keeps Rita in scope, but she does not match the phrase: nothing leaks through the orWhere.
@@ -138,4 +148,51 @@ it('loads what the title and details need once for all results', function (): vo
     expect($results)->toHaveCount(3)
         ->and($results->first()->details)->toBe(['Customer' => 'Tess Loaded', 'External Number' => 'EXT-848484'])
         ->and($loads)->toBeLessThanOrEqual(1);
+});
+
+it('does not repeat the title as what matched', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view']);
+    $this->createOrder('OR5001', 'EXT-212121');
+    $this->indexAll();
+
+    $titleMatch = OrderResource::getGlobalSearchResults('OR5001');
+
+    expect($titleMatch)->toHaveCount(1)
+        ->and($titleMatch->first()->details)->toBe([])
+        ->and(OrderResource::getGlobalSearchResults('EXT-212121')->first()->details)->toBe(['External Number' => 'EXT-212121']);
+});
+
+it('shows found records whatever the flags of the answer say', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view']);
+    $this->createOrder('OR6001', 'EXT-323232');
+    $this->indexAll();
+
+    // A driver that tells the index is still being built while it answers.
+    resolve(DriverManager::class)->extend('flagged', static fn (CompiledDefinition $definition): Driver => new class(new PostgresDriver($definition)) implements Driver
+    {
+        public function __construct(private readonly Driver $inner) {}
+
+        public function get(SearchQuery $query): SearchResults
+        {
+            return $this->inner->get($query)->whileIndexBuilding();
+        }
+
+        public function similar(SearchQuery $query): SearchResults
+        {
+            return $this->inner->similar($query);
+        }
+
+        public function apply(SearchQuery $query, Builder $tableQuery): Builder
+        {
+            return $this->inner->apply($query, $tableQuery);
+        }
+
+        public function candidates(SearchQuery $query): Collection
+        {
+            return $this->inner->candidates($query);
+        }
+    });
+    config(['model-search.driver' => 'flagged']);
+
+    expect($this->globalTitles(OrderResource::class, 'EXT-323232'))->toBe(['OR6001']);
 });

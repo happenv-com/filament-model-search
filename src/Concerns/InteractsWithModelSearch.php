@@ -11,6 +11,7 @@ use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\Support\HostScope;
 use Happenv\FilamentModelSearch\Support\ReadySearch;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Throwable;
@@ -47,7 +48,7 @@ trait InteractsWithModelSearch
             return new Collection;
         }
 
-        $searchClass = ReadySearch::for(static::getModel(), static::modelSearch());
+        $searchClass = ReadySearch::for(static::getModel());
 
         if ($searchClass === null) {
             return parent::getGlobalSearchResults($search);
@@ -90,16 +91,20 @@ trait InteractsWithModelSearch
                 continue;
             }
 
+            $title = static::getGlobalSearchResultTitle($record);
             $details = static::getGlobalSearchResultDetails($record);
             $match = $result->match;
 
-            // Only a value the viewer may see is shown; the label alone would tell what the value is.
-            if ($match->value !== null && ! array_key_exists($match->label, $details)) {
-                $details[$match->label] = $match->value;
+            if ($match->value === null) {
+                // The viewer may not see the value: what matched is still told, the value is not.
+                $details[trans('filament-model-search::global-search.matched_by')] ??= $match->label;
+            } elseif ($match->value !== ($title instanceof Htmlable ? strip_tags($title->toHtml()) : $title)) {
+                // A value equal to the title adds nothing, and a native detail of the same name stays.
+                $details[$match->label] ??= $match->value;
             }
 
             $global->push(new GlobalSearchResult(
-                title: static::getGlobalSearchResultTitle($record),
+                title: $title,
                 url: $url,
                 details: $details,
                 actions: array_map(

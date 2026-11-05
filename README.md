@@ -15,6 +15,24 @@ Call `modelSearch()` after `relationship()`. Only the search is replaced; labels
 
 A select has no room for a message, so a search that timed out, was refused or hits an index that is still building offers an empty list.
 
+## Global search
+
+```php
+final class OrderResource extends Resource
+{
+    use InteractsWithModelSearch;
+
+    public static function modelSearch(): string
+    {
+        return OrderSearch::class;
+    }
+}
+```
+
+List the resource in `FilamentModelSearchPlugin::make()->resources([...])`. Until the index serves the model, the resource's global search stays Filament's own. Once it does, the index answers, in the core's ranking order, inside `getGlobalSearchEloquentQuery()`; titles, urls, details and actions are the resource's own, and a line telling what matched is added (the value only when the core's reveal rule lets the viewer see it; otherwise just "Matched by: e-mail"). Access (`canAccess()` and `canViewAny()`) is checked on every call, not when the panel boots.
+
+A global search has no room for a message, so a search that timed out, was refused, or hits an index that is still building without having found anything shows no results. Results that were found are shown whatever the flags say. `modifyGlobalSearchQuery()` is not applied on the index path, and a resource that defines its own `getGlobalSearchResults()` is refused when it is registered, because the trait's method would never run.
+
 ## Licence
 
 MIT. See [LICENSE.md](LICENSE.md).

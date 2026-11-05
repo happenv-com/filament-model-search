@@ -20,10 +20,30 @@ use Happenv\ModelSearch\Postgres\Indexing\IndexState;
 use Happenv\ModelSearch\Registry\ModelSearchRegistry;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 
 covers(ResourceBindings::class, ResourceBinding::class);
+
+final class ShadowingOrderResource extends Resource
+{
+    use InteractsWithModelSearch;
+
+    protected static ?string $model = Order::class;
+
+    #[Override]
+    public static function modelSearch(): string
+    {
+        return OrderSearch::class;
+    }
+
+    #[Override]
+    public static function getGlobalSearchResults(string $search): Collection
+    {
+        return new Collection;
+    }
+}
 
 final class TraitOrderResource extends Resource
 {
@@ -280,4 +300,9 @@ it('reports a failing cache store once and still answers from the core', functio
 
     expect(binding(OrderSearch::class, OrderResource::class)->isReady())->toBeFalse()
         ->and($reported)->toHaveCount(1);
+});
+
+it('refuses a resource whose own global search hides the one of the trait', function (): void {
+    expect(fn () => new ResourceBindings()->registerResource(ShadowingOrderResource::class))
+        ->toThrow(LogicException::class, 'defines its own getGlobalSearchResults()');
 });

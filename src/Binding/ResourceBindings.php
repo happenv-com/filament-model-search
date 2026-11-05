@@ -74,6 +74,13 @@ final class ResourceBindings
             throw new LogicException(sprintf('%s is listed for the model search but does not use %s; add the trait, or bind it with FilamentModelSearch::resource().', $resourceClass, InteractsWithModelSearch::class));
         }
 
+        // The trait's global search would never run: say so instead of silently searching natively.
+        $own = new ReflectionMethod($resourceClass, 'getGlobalSearchResults');
+
+        if ($own->getFileName() !== new ReflectionMethod(InteractsWithModelSearch::class, 'getGlobalSearchResults')->getFileName()) {
+            throw new LogicException(sprintf('%s defines its own getGlobalSearchResults(), which hides the one of %s. Remove it, or bind the search with FilamentModelSearch::resource() and call the search yourself.', $resourceClass, InteractsWithModelSearch::class));
+        }
+
         $searchClass = new ReflectionMethod($resourceClass, 'modelSearch')->invoke(null);
 
         if (! is_string($searchClass) || ! class_exists($searchClass)) {
