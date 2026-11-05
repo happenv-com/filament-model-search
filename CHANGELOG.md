@@ -2,6 +2,14 @@
 
 All notable changes to `filament-model-search` will be documented in this file.
 
+## v0.1.1 - 2026-11-05
+
+### What's Changed
+
+* fix: open the palette from the topbar trigger, address review of #1 by @webard in https://github.com/happenv-com/filament-model-search/pull/2
+
+**Full Changelog**: https://github.com/happenv-com/filament-model-search/compare/v0.1.0...v0.1.1
+
 ## v0.1.0 - 2026-11-05
 
 ### What's Changed
