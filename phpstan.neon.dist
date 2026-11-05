@@ -7,9 +7,5 @@ parameters:
     paths:
         - src
         - config
+        - phpstan
     checkOctaneCompatibility: true
-    ignoreErrors:
-        # A public trait for host resources: the package itself never uses it.
-        -
-            identifier: trait.unused
-            path: src/Concerns/InteractsWithModelSearch.php

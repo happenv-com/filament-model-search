@@ -67,7 +67,7 @@ final class FilamentModelSearchPlugin implements Plugin
         $bindings = resolve(ResourceBindings::class);
 
         foreach ($this->resources as $resource) {
-            $bindings->registerResource($resource);
+            $bindings->registerResource($resource, $panel->getId());
         }
     }
 

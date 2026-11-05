@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+use Filament\Facades\Filament;
+use Filament\Panel;
+use Filament\Resources\ParentResourceRegistration;
 use Filament\Resources\Resource;
 use Happenv\FilamentModelSearch\Binding\ResourceBinding;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\Concerns\InteractsWithModelSearch;
 use Happenv\FilamentModelSearch\Facades\FilamentModelSearch;
-use Happenv\FilamentModelSearch\FilamentModelSearchPlugin;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Customer;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource;
@@ -16,8 +18,11 @@ use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\CustomerSearch;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
 use Happenv\ModelSearch\Postgres\Indexing\IndexState;
 use Happenv\ModelSearch\Registry\ModelSearchRegistry;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\HtmlString;
 
-covers(ResourceBindings::class);
+covers(ResourceBindings::class, ResourceBinding::class);
 
 final class TraitOrderResource extends Resource
 {
@@ -29,6 +34,39 @@ final class TraitOrderResource extends Resource
     public static function modelSearch(): string
     {
         return OrderSearch::class;
+    }
+}
+
+final class PlainOrderResource extends Resource
+{
+    protected static ?string $model = Order::class;
+}
+
+final class HtmlIconOrderResource extends Resource
+{
+    protected static ?string $model = Order::class;
+
+    #[Override]
+    public static function getNavigationIcon(): string|BackedEnum|Htmlable|null
+    {
+        return new HtmlString('<svg></svg>');
+    }
+}
+
+final class NestedOrderResource extends Resource
+{
+    protected static ?string $model = Order::class;
+
+    #[Override]
+    public static function getParentResourceRegistration(): ?ParentResourceRegistration
+    {
+        return CustomerResource::asParent()->relationship('orders');
+    }
+
+    #[Override]
+    public static function getPages(): array
+    {
+        return OrderResource::getPages();
     }
 }
 
@@ -50,8 +88,7 @@ it('binds a search to a resource explicitly and through the trait', function ():
         ->and($bindings->for(Order::class)?->resourceClass())->toBe(TraitOrderResource::class)
         ->and($bindings->all())->toHaveCount(2);
 
-    // The facade and the panel plugin fill the shared instance; the panel lists no trait resources
-    // here, so the shared instance holds only what was bound explicitly.
+    // The shared instance was filled by the admin panel's plugin; the facade adds a panel-agnostic pair.
     FilamentModelSearch::resource(OrderSearch::class, OrderResource::class);
     FilamentModelSearch::resource(OrderSearch::class, OrderResource::class);
 
@@ -132,15 +169,85 @@ it('readiness reflects the core and refreshes after the cache window', function 
     expect($binding->isReady())->toBeTrue();
 });
 
-it('binds the trait resources a panel lists when the plugin registers, and ignores the others', function (): void {
-    $plugin = FilamentModelSearchPlugin::make()
-        ->resources([TraitOrderResource::class, CustomerResource::class]);
-
-    $plugin->register(Filament\Facades\Filament::getCurrentPanel());
-    $plugin->register(Filament\Facades\Filament::getCurrentPanel());
-
+it('fills the shared bindings when a panel registers its plugin', function (): void {
     $bindings = resolve(ResourceBindings::class);
 
+    expect($bindings->for(Order::class)?->resourceClass())->toBe(OrderResource::class)
+        ->and($bindings->for(Customer::class)?->resourceClass())->toBe(CustomerResource::class)
+        ->and($bindings->all())->toHaveCount(3);
+});
+
+it('refuses a listed resource without the trait, naming the fix', function (): void {
+    $bindings = new ResourceBindings;
+
+    expect(fn () => $bindings->registerResource(PlainOrderResource::class))
+        ->toThrow(LogicException::class, 'InteractsWithModelSearch')
+        ->and(fn () => $bindings->register(PlainOrderResource::class, OrderResource::class))
+        ->toThrow(LogicException::class, 'not a search definition');
+});
+
+it('lets two panels bind different resources for one model', function (): void {
+    $bindings = new ResourceBindings;
+    $bindings->register(OrderSearch::class, OrderResource::class, 'admin');
+    $bindings->register(OrderSearch::class, TraitOrderResource::class, 'other');
+
+    expect(fn () => $bindings->register(OrderSearch::class, TraitOrderResource::class, 'admin'))->toThrow(LogicException::class);
+
+    Filament::setCurrentPanel('admin');
+    expect($bindings->for(Order::class)?->resourceClass())->toBe(OrderResource::class);
+
+    $other = Panel::make()->id('other')->path('other');
+    Filament::registerPanel($other);
+    Filament::setCurrentPanel($other);
     expect($bindings->for(Order::class)?->resourceClass())->toBe(TraitOrderResource::class)
-        ->and($bindings->for(Customer::class))->toBeNull();
+        ->and($bindings->all())->toHaveCount(1);
+});
+
+it('does not give access to a resource that is not registered on the current panel', function (): void {
+    $binding = binding(OrderSearch::class, OrderResource::class);
+    $order = Order::query()->create(['signature' => 'OR7007']);
+    $this->signIn(['orders.viewAny', 'orders.view']);
+
+    expect($binding->isAccessible())->toBeTrue();
+
+    $other = Panel::make()->id('other')->path('other');
+    Filament::registerPanel($other);
+    Filament::setCurrentPanel($other);
+
+    expect($binding->isAccessible())->toBeFalse()
+        ->and($binding->url($order))->toBeNull();
+});
+
+it('has no url for a nested resource', function (): void {
+    $order = Order::query()->create(['signature' => 'OR8008']);
+    $this->signIn(['orders.viewAny', 'orders.view', 'orders.update']);
+
+    expect(binding(OrderSearch::class, NestedOrderResource::class)->url($order))->toBeNull();
+});
+
+it('reads icon and sort, and drops an Htmlable icon', function (): void {
+    expect(binding(CustomerSearch::class, CustomerResource::class)->icon())->toBe('heroicon-o-users')
+        ->and(binding(CustomerSearch::class, CustomerResource::class)->sort())->toBe(20)
+        ->and(binding(OrderSearch::class, HtmlIconOrderResource::class)->icon())->toBeNull()
+        ->and(binding(OrderSearch::class, HtmlIconOrderResource::class)->sort())->toBe(0);
+});
+
+it('answers from the core when the cache store fails', function (): void {
+    config(['model-search.cache_store' => 'no-such-store']);
+
+    expect(binding(OrderSearch::class, OrderResource::class)->isReady())->toBeFalse();
+});
+
+it('keeps readiness apart per connection', function (): void {
+    config(['database.connections.tenant_b' => config('database.connections.pgsql')]);
+    $binding = binding(OrderSearch::class, OrderResource::class);
+    $connection = Order::query()->getConnection();
+
+    // The default connection remembers "ready"; a connection of another name must not read that.
+    Cache::put(sprintf('filament-model-search:ready:%s:%s:%s', $connection->getName(), $connection->getDatabaseName(), Order::class), true, 60);
+
+    expect($binding->isReady())->toBeTrue();
+
+    config(['database.default' => 'tenant_b']);
+    expect($binding->isReady())->toBeFalse();
 });

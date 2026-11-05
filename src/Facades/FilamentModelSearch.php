@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Facade;
 final class FilamentModelSearch extends Facade
 {
     /**
-     * Binds a search definition to the resource that shows its records.
+     * Binds a search definition to the resource that shows its records, on every panel.
      *
      * @param  class-string  $searchClass
      * @param  class-string<resource>  $resourceClass

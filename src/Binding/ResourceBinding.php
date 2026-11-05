@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Happenv\FilamentModelSearch\Binding;
 
 use BackedEnum;
+use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Happenv\ModelSearch\Facades\ModelSearches;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use Throwable;
 
 /**
  * A search definition bound to the Filament resource that shows its records.
@@ -63,7 +65,9 @@ final readonly class ResourceBinding
     {
         $resource = $this->resourceClass;
 
-        return $resource::canAccess() && $resource::canViewAny();
+        return $this->isOnCurrentPanel()
+            && $resource::canAccess()
+            && $resource::canViewAny();
     }
 
     /**
@@ -92,6 +96,15 @@ final readonly class ResourceBinding
     {
         $resource = $this->resourceClass;
 
+        if (! $this->isOnCurrentPanel()) {
+            return null;
+        }
+
+        // Like Filament's global search: a nested resource has no url of its own.
+        if ($resource::getParentResourceRegistration() !== null) {
+            return null;
+        }
+
         if ($resource::hasPage('view') && $resource::canView($record)) {
             return $resource::getUrl('view', ['record' => $record]);
         }
@@ -101,6 +114,11 @@ final readonly class ResourceBinding
         }
 
         return null;
+    }
+
+    private function isOnCurrentPanel(): bool
+    {
+        return in_array($this->resourceClass, Filament::getCurrentOrDefaultPanel()?->getResources() ?? [], true);
     }
 
     public function icon(): string|BackedEnum|null
@@ -125,24 +143,29 @@ final readonly class ResourceBinding
     public function isReady(): bool
     {
         $seconds = config('filament-model-search.readiness_cache_seconds');
-        $connection = (new $this->modelClass)->getConnection();
-        $key = sprintf('filament-model-search:ready:%s:%s:%s', $connection->getName(), $connection->getDatabaseName(), $this->modelClass);
-        $store = config('model-search.cache_store');
-        $cache = Cache::store(is_string($store) ? $store : null);
 
         if (! is_int($seconds) || $seconds <= 0) {
             return ModelSearches::isReady($this->modelClass);
         }
 
-        $cached = $cache->get($key);
+        // The cache is a convenience: when it fails, the core answers.
+        try {
+            $connection = (new $this->modelClass)->getConnection();
+            $key = sprintf('filament-model-search:ready:%s:%s:%s', $connection->getName(), $connection->getDatabaseName(), $this->modelClass);
+            $store = config('model-search.cache_store');
+            $cache = Cache::store(is_string($store) ? $store : null);
+            $cached = $cache->get($key);
 
-        if (is_bool($cached)) {
-            return $cached;
+            if (is_bool($cached)) {
+                return $cached;
+            }
+
+            $ready = ModelSearches::isReady($this->modelClass);
+            $cache->put($key, $ready, $seconds);
+
+            return $ready;
+        } catch (Throwable) {
+            return ModelSearches::isReady($this->modelClass);
         }
-
-        $ready = ModelSearches::isReady($this->modelClass);
-        $cache->put($key, $ready, $seconds);
-
-        return $ready;
     }
 }
