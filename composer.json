@@ -1,0 +1,99 @@
+{
+    "name": "happenv-com/filament-model-search",
+    "description": "Filament integration for happenv-com/laravel-model-search: a command palette, table search, select search and global search backed by one record index.",
+    "license": "MIT",
+    "type": "library",
+    "keywords": [
+        "happenv",
+        "laravel",
+        "filamentphp",
+        "filament",
+        "filament-plugin",
+        "search",
+        "command-palette",
+        "filament-model-search"
+    ],
+    "authors": [
+        {
+            "name": "Happenv sp. z o.o.",
+            "email": "code@happenv.com",
+            "homepage": "https://happenv.com",
+            "role": "Maintainer"
+        },
+        {
+            "name": "webard",
+            "email": "code@webard.me",
+            "homepage": "https://github.com/webard",
+            "role": "Developer"
+        }
+    ],
+    "homepage": "https://github.com/happenv-com/filament-model-search",
+    "support": {
+        "issues": "https://github.com/happenv-com/filament-model-search/issues",
+        "source": "https://github.com/happenv-com/filament-model-search",
+        "security": "https://github.com/happenv-com/filament-model-search/security/policy"
+    },
+    "require": {
+        "php": "^8.4",
+        "filament/filament": "^5.11",
+        "happenv-com/laravel-model-search": "^0.1",
+        "illuminate/contracts": "^13.0",
+        "illuminate/database": "^13.0",
+        "illuminate/support": "^13.0",
+        "livewire/livewire": "^4.4"
+    },
+    "require-dev": {
+        "ergebnis/composer-normalize": "^2.52",
+        "happenv-com/filament-phpstan-macros": "^1.0",
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.0",
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "pestphp/pest-plugin-livewire": "^4.0",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.0",
+        "rector/rector": "^2.0"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "Happenv\\FilamentModelSearch\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Happenv\\FilamentModelSearch\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "ergebnis/composer-normalize": true,
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        },
+        "sort-packages": true
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-1.x": "1.x-dev"
+        },
+        "laravel": {
+            "providers": [
+                "Happenv\\FilamentModelSearch\\FilamentModelSearchServiceProvider"
+            ]
+        },
+        "phpstan/extension-installer": {
+            "ignore": [
+                "larastan/larastan",
+                "happenv-com/filament-phpstan-macros"
+            ]
+        }
+    },
+    "scripts": {
+        "analyse": "phpstan analyse --ansi",
+        "lint": "pint --test",
+        "test": "pest"
+    }
+}

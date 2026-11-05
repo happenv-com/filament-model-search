@@ -1,0 +1,9 @@
+/vendor
+/composer.lock
+/.phpunit.cache
+/phpunit.xml
+.DS_Store
+
+# Composer credentials — never commit.
+auth.json
+/build
