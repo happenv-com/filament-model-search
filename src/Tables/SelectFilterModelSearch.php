@@ -7,6 +7,7 @@ namespace Happenv\FilamentModelSearch\Tables;
 use Filament\Forms\Components\Select;
 use Filament\Tables\Filters\SelectFilter;
 use Happenv\FilamentModelSearch\Forms\SelectModelSearch;
+use Happenv\FilamentModelSearch\Support\SearchArguments;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
@@ -38,10 +39,13 @@ final class SelectFilterModelSearch
             throw new LogicException('modelSearch() needs a relationship: call ->relationship() on the filter first.');
         }
 
-        $kinds = SelectModelSearch::validate($searchClass, $only);
+        $kinds = SearchArguments::validate($searchClass, $only);
 
-        return $filter->getSearchResultsUsing(static function (Select $component, ?string $search) use ($filter, $searchClass, $kinds, $stages): array {
+        return $filter->getSearchResultsUsing(static function (Select $component, #[\SensitiveParameter] ?string $search) use ($filter, $searchClass, $kinds, $stages): array {
             $results = SelectModelSearch::search($component, (string) $search, $searchClass, $kinds, $stages);
+
+            // Filament mirrors a limit of the relationship query back onto the filter, so a rebuilt field keeps it.
+            $filter->optionsLimit($component->getOptionsLimit());
 
             if ($results === null) {
                 return $filter->getSearchResultsFromRelationship($component, $search);

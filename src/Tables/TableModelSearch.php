@@ -8,6 +8,7 @@ use Filament\Facades\Filament;
 use Filament\Tables\Table;
 use Happenv\FilamentModelSearch\Support\HostScope;
 use Happenv\FilamentModelSearch\Support\ReadySearch;
+use Happenv\FilamentModelSearch\Support\SearchArguments;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Happenv\ModelSearch\Definition\ModelSearch;
 use Illuminate\Contracts\Support\Htmlable;
@@ -42,11 +43,9 @@ final class TableModelSearch
      */
     public static function configure(Table $table, ?string $searchClass = null, ?array $only = null): Table
     {
-        if ($searchClass !== null) {
-            if (! is_subclass_of($searchClass, ModelSearch::class)) {
-                throw new InvalidArgumentException(sprintf('%s is not a search definition: it must extend %s.', $searchClass, ModelSearch::class));
-            }
+        $kinds = SearchArguments::validate($searchClass, $only);
 
+        if ($searchClass !== null) {
             $tableModel = $table->getModel();
 
             if ($tableModel !== null && $searchClass::model() !== $tableModel) {
@@ -54,13 +53,6 @@ final class TableModelSearch
             }
         }
 
-        foreach ($only ?? [] as $kind) {
-            if (! is_string($kind)) {
-                throw new InvalidArgumentException('The kinds given to modelSearch() must be strings.');
-            }
-        }
-
-        $kinds = $only === null || $only === [] ? null : array_values($only);
         /** @var list<string>|null $kinds */
         $state = new TableSearchState;
 

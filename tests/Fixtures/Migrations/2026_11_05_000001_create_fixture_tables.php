@@ -25,6 +25,8 @@ return new class extends Migration
             $table->text('email')->nullable();
             $table->text('phone')->nullable();
             $table->boolean('active')->default(true);
+            $table->text('code')->nullable();
+            $table->unsignedBigInteger('referrer_id')->nullable();
             $table->timestampsTz(6);
         });
 
@@ -35,6 +37,7 @@ return new class extends Migration
             $table->text('customer_email')->nullable();
             $table->text('customer_name')->nullable();
             $table->foreignId('customer_id')->nullable()->constrained('customers')->nullOnDelete();
+            $table->text('customer_code')->nullable();
             $table->text('state')->default('unshipped');
             $table->timestampTz('purchased_at', 6)->nullable();
             $table->timestampsTz(6);

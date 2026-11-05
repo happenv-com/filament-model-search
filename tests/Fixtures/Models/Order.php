@@ -38,4 +38,14 @@ final class Order extends Model
     {
         return $this->belongsTo(Customer::class);
     }
+
+    /**
+     * A relationship whose related key is not the primary key.
+     *
+     * @return BelongsTo<Customer, $this>
+     */
+    public function customerByCode(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'customer_code', 'code');
+    }
 }

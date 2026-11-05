@@ -10,11 +10,12 @@ use Filament\Support\Services\RelationshipJoiner;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\Support\HostScope;
 use Happenv\FilamentModelSearch\Support\ReadySearch;
+use Happenv\FilamentModelSearch\Support\SearchArguments;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
-use Happenv\ModelSearch\Definition\ModelSearch;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
 use Throwable;
@@ -49,30 +50,9 @@ final class SelectModelSearch
             throw new LogicException('modelSearch() needs a relationship: call ->relationship() on the select first.');
         }
 
-        $kinds = self::validate($searchClass, $only);
+        $kinds = SearchArguments::validate($searchClass, $only);
 
         return $select->getSearchResultsUsing(static fn (Select $component, ?string $search): array => self::search($component, (string) $search, $searchClass, $kinds, $stages) ?? $component->getSearchResultsFromRelationship($search));
-    }
-
-    /**
-     * @param  array<array-key, mixed>|null  $only
-     * @return list<string>|null
-     *
-     * @throws InvalidArgumentException
-     */
-    public static function validate(?string $searchClass, ?array $only): ?array
-    {
-        if ($searchClass !== null && ! is_subclass_of($searchClass, ModelSearch::class)) {
-            throw new InvalidArgumentException(sprintf('%s is not a search definition: it must extend %s.', $searchClass, ModelSearch::class));
-        }
-
-        foreach ($only ?? [] as $kind) {
-            if (! is_string($kind)) {
-                throw new InvalidArgumentException('The kinds given to modelSearch() must be strings.');
-            }
-        }
-
-        return $only === null || $only === [] ? null : array_values($only);
     }
 
     /**
@@ -106,17 +86,15 @@ final class SelectModelSearch
             return null;
         }
 
-        $subquery = self::relationshipQuery($select, $relationship, $search);
-        $limit = $subquery->getQuery()->limit;
+        $offered = self::relationshipQuery($select, $relationship, $search);
+        $limit = $offered->getQuery()->limit;
 
         if ($limit !== null) {
             $select->optionsLimit($limit);
         }
 
-        $qualifiedKey = $select->getQualifiedRelatedKeyNameForRelationship($relationship);
-
         $request = $searchClass::query($search)
-            ->within(self::host($related, $subquery, $qualifiedKey))
+            ->within(self::host($related, $offered))
             ->forUser(Filament::auth()->user())
             ->limit($select->getOptionsLimit());
 
@@ -138,16 +116,32 @@ final class SelectModelSearch
             return [];
         }
 
-        // A select has no room for a message: anything but results is an empty list.
-        if (SearchOutcome::fromResults($results) !== SearchOutcome::Results) {
+        // Results that carry items are scoped and correct whatever the flags say (also while an index rebuilds);
+        // a select has no room for a message, so an outcome without items is an empty list.
+        $qualifiedKey = $select->getQualifiedRelatedKeyNameForRelationship($relationship);
+        $keyName = Str::afterLast($qualifiedKey, '.');
+        $ranked = [];
+
+        foreach ($results as $result) {
+            $ranked[] = $result->model->getAttribute($keyName);
+        }
+
+        if ($ranked === []) {
             return [];
         }
 
-        $keyName = substr(strrchr('.'.$qualifiedKey, '.') ?: $qualifiedKey, 1);
+        // Labelled from the records the relationship query shapes (withCount, addSelect, joins), as Filament does.
+        $labelled = self::relationshipQuery($select, $relationship, $search, $qualifiedKey, $ranked)->get()
+            ->mapWithKeys(static fn (Model $record): array => [$record->getAttribute($keyName) => self::label($select, $record)]);
+
         $options = [];
 
-        foreach ($results as $result) {
-            $options[$result->model->getAttribute($keyName)] = self::label($select, $result->model);
+        foreach ($ranked as $key) {
+            $label = $labelled->get($key);
+
+            if (is_string($label)) {
+                $options[$key] = $label;
+            }
         }
 
         return $options;
@@ -157,9 +151,10 @@ final class SelectModelSearch
      * What the relationship offers, built as Filament builds it, with the host's own modifications.
      *
      * @param  Relation<Model, Model, mixed>  $relationship
+     * @param  list<mixed>|null  $keys  Restricts the query to these option keys, the way Filament loads selected values.
      * @return Builder<Model>
      */
-    private static function relationshipQuery(Select $select, Relation $relationship, #[\SensitiveParameter] string $search): Builder
+    private static function relationshipQuery(Select $select, Relation $relationship, #[\SensitiveParameter] string $search, ?string $qualifiedKey = null, ?array $keys = null): Builder
     {
         $query = app(RelationshipJoiner::class)->prepareQueryForNoConstraints($relationship);
 
@@ -170,31 +165,46 @@ final class SelectModelSearch
             $query->where($record->getQualifiedKeyName(), '!=', $record->getKey());
         }
 
+        if ($keys !== null && $qualifiedKey !== null) {
+            $query->whereIn($qualifiedKey, $keys);
+        }
+
         if ($modify !== null) {
             $query = $select->evaluate($modify, ['query' => $query, 'search' => $search]) ?? $query;
+        }
+
+        if ($keys !== null) {
+            $query->getQuery()->limit = null;
+            $query->getQuery()->offset = null;
         }
 
         return $query;
     }
 
     /**
-     * The host of the search: the resource's scope of the related model (or the whole model), cut down to
-     * the keys the relationship query offers. A semi-join keeps an `orWhere` of the relationship query from
-     * leaking out of its own group, and carries no phrase.
+     * The host of the search: the related model cut down, by two semi-joins on its primary key, to what the
+     * resource's scope offers and to what the relationship query offers. Each side keeps its own `orWhere`
+     * inside its subquery, and no phrase is involved.
      *
      * @param  Builder<Model>  $relationshipQuery
      * @return Builder<Model>
      */
-    private static function host(Model $related, Builder $relationshipQuery, string $qualifiedKey): Builder
+    private static function host(Model $related, Builder $relationshipQuery): Builder
     {
+        $key = $related->getQualifiedKeyName();
+        $host = $related->newQuery();
+
         $binding = resolve(ResourceBindings::class)->for($related::class);
-        $host = $binding !== null ? HostScope::of($binding->scope()) : $related->newQuery();
+
+        if ($binding !== null) {
+            $host->whereIn($key, HostScope::of($binding->scope())->select($key));
+        }
 
         $offered = HostScope::of($relationshipQuery);
         $offered->getQuery()->limit = null;
         $offered->getQuery()->offset = null;
 
-        return $host->whereIn($related->getQualifiedKeyName(), $offered->select($qualifiedKey));
+        return $host->whereIn($key, $offered->select($key));
     }
 
     /**

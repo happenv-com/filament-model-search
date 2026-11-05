@@ -30,7 +30,7 @@ final class OrderForm extends Component implements HasForms
         $select = Select::make('customer_id')->relationship('customer', 'name')->searchable();
 
         return $schema
-            ->model(Order::class)
+            ->model(config('fixtures.form_model') ?? Order::class)
             ->components([is_callable($shape) ? $shape($select) : $select])
             ->statePath('data');
     }

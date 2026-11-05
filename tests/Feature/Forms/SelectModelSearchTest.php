@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use Filament\Forms\Components\Select;
 use Happenv\FilamentModelSearch\Forms\SelectModelSearch;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Customer;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
+use Happenv\ModelSearch\Postgres\Indexing\IndexState;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 covers(SelectModelSearch::class);
 
@@ -14,6 +17,7 @@ beforeEach(function (): void {
         'filament-model-search.readiness_cache_seconds' => 0,
         'fixtures.customer_select' => null,
         'fixtures.customer_scope' => null,
+        'fixtures.form_model' => null,
     ]);
     $this->signIn(['orders.viewAny', 'orders.view', 'customers.viewAny', 'customers.view']);
     config(['fixtures.customer_select' => static fn (Select $select): Select => $select->modelSearch()]);
@@ -21,15 +25,14 @@ beforeEach(function (): void {
 
 it('searches options through the index once ready, native before', function (): void {
     $customer = $this->createCustomer('Alice Smith', 'alice@example.test');
-    $other = $this->createCustomer('Bob Jones', 'bob@example.test');
+    $this->createCustomer('Bob Jones', 'bob@example.test');
 
     expect($this->customerSelect()->getSearchResults('Alice'))->toBe([$customer->id => 'Alice Smith'])
         ->and($this->customerSelect()->getSearchResults('alice@example.test'))->toBe([]);
 
     $this->indexAll();
 
-    expect($this->customerSelect()->getSearchResults('alice@example.test'))->toBe([$customer->id => 'Alice Smith'])
-        ->and($this->customerSelect()->getSearchResults('alice@example.test'))->not->toHaveKey($other->id);
+    expect($this->customerSelect()->getSearchResults('alice@example.test'))->toBe([$customer->id => 'Alice Smith']);
 });
 
 it('keeps the labels of selected values', function (): void {
@@ -155,6 +158,88 @@ it('offers an empty list instead of an error when the core refuses the search', 
         ->and($select->getSearchResults('rate@example.test'))->toBe([]);
 });
 
+it('compares primary keys when the option key is another column', function (): void {
+    $this->createCustomer('Kay Coded', 'kay@example.test', null, ['code' => 'C-KAY']);
+    $this->createCustomer('Lee Coded', 'lee@example.test', null, ['code' => 'C-LEE']);
+    $this->indexAll();
+    config(['fixtures.customer_select' => static fn (Select $select): Select => $select->relationship('customerByCode', 'name')->modelSearch()]);
+
+    expect($this->customerSelect()->getSearchResults('kay@example.test'))->toBe(['C-KAY' => 'Kay Coded']);
+});
+
+it('lets an orWhere in the resource scope never leak past the relationship query', function (): void {
+    $this->createCustomer('Orr Branch', 'orr.a@a.test', 'P1');
+    $both = $this->createCustomer('Orr Both', 'orr.b@a.test', 'P2');
+    $this->indexAll();
+    config([
+        'fixtures.customer_scope' => static fn (Builder $query): Builder => $query->where('phone', 'P1')->orWhere('phone', 'P2'),
+        'fixtures.customer_select' => static fn (Select $select): Select => $select
+            ->relationship('customer', 'name', static fn (Builder $query): Builder => $query->where('phone', 'P2'))
+            ->modelSearch(),
+    ]);
+
+    expect($this->customerSelect()->getSearchResults('orr'))->toBe([$both->id => 'Orr Both']);
+});
+
+it('labels the options from records the relationship query shaped', function (): void {
+    $customer = $this->createCustomer('Cnt Counted', 'cnt@example.test');
+    $customer->orders()->create(['signature' => 'OR-CNT-1']);
+    $customer->orders()->create(['signature' => 'OR-CNT-2']);
+    $this->indexAll();
+    config(['fixtures.customer_select' => static fn (Select $select): Select => $select
+        ->relationship('customer', 'name', static fn (Builder $query): Builder => $query->withCount('orders'))
+        ->getOptionLabelFromRecordUsing(static fn (Customer $record): string => $record->name.' ('.$record->orders_count.')')
+        ->modelSearch()]);
+
+    Model::preventAccessingMissingAttributes();
+
+    try {
+        expect($this->customerSelect()->getSearchResults('cnt@example.test'))->toBe([$customer->id => 'Cnt Counted (2)']);
+    } finally {
+        Model::preventAccessingMissingAttributes(false);
+    }
+});
+
+it('keeps the rank order after loading the records', function (): void {
+    $this->createCustomer('Aaa Prefix', null, '7771234');
+    $exact = $this->createCustomer('Zzz Exact', null, '777123');
+    $this->indexAll();
+
+    expect(array_keys($this->customerSelect()->getSearchResults('777123'))[0])->toBe($exact->id);
+});
+
+it('shows results that carry items while the index is rebuilding', function (): void {
+    $customer = $this->createCustomer('Slow Rebuild', 'slow@example.test');
+    $this->indexAll();
+    (new IndexState)->markForRebuild(['customer']);
+
+    expect($this->customerSelect()->getSearchResults('slow@example.test'))->toBe([$customer->id => 'Slow Rebuild']);
+});
+
+it('leaves out the record being edited with ignoreRecord', function (): void {
+    $edited = $this->createCustomer('Ign Edited', 'ign.edited@example.test');
+    $other = $this->createCustomer('Ign Other', 'ign.other@example.test');
+    $this->indexAll();
+    config([
+        'fixtures.form_model' => $edited,
+        'fixtures.customer_select' => static fn (Select $select): Select => $select->relationship('referrer', 'name', ignoreRecord: true)->modelSearch(),
+    ]);
+
+    expect($this->customerSelect()->getSearchResults('ign'))->toBe([$other->id => 'Ign Other']);
+});
+
+it('takes the limit of the relationship query', function (): void {
+    foreach (range(1, 4) as $n) {
+        $this->createCustomer('Cap Person '.$n, 'cap'.$n.'@example.test');
+    }
+    $this->indexAll();
+    config(['fixtures.customer_select' => static fn (Select $select): Select => $select
+        ->relationship('customer', 'name', static fn (Builder $query): Builder => $query->limit(2))
+        ->modelSearch()]);
+
+    expect($this->customerSelect()->getSearchResults('cap'))->toHaveCount(2);
+});
+
 it('starts using the index without a restart once the type becomes ready', function (): void {
     $customer = $this->createCustomer('Late Bloomer', 'late@example.test');
     $select = $this->customerSelect();
@@ -177,12 +262,4 @@ it('refuses a definition of another model and non-string kinds', function (): vo
     expect(fn () => $this->customerSelect()->getSearchResults('x'))->toThrow(InvalidArgumentException::class);
     expect(static fn (): Select => Select::make('c')->relationship('customer', 'name')->modelSearch(only: [1]))
         ->toThrow(InvalidArgumentException::class);
-});
-
-it('treats an empty only() as no restriction', function (): void {
-    $customer = $this->createCustomer('Free Range', 'free@example.test');
-    $this->indexAll();
-    config(['fixtures.customer_select' => static fn (Select $select): Select => $select->modelSearch(only: [])]);
-
-    expect($this->customerSelect()->getSearchResults('free@example.test'))->toBe([$customer->id => 'Free Range']);
 });
