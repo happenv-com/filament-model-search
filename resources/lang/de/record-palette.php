@@ -5,6 +5,7 @@ declare(strict_types=1);
 return [
     'trigger' => 'Datensätze suchen',
     'title' => 'Datensatzsuche',
+    'search_label' => 'Datensätze durchsuchen',
     'placeholder' => 'Datensätze suchen…',
     'hint' => 'Gib mindestens zwei Zeichen ein.',
     'search_every_stage' => 'In allen suchen',

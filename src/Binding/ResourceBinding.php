@@ -6,7 +6,8 @@ namespace Happenv\FilamentModelSearch\Binding;
 
 use BackedEnum;
 use Filament\Facades\Filament;
-use Filament\Resources\Resource;
+use Filament\Resources\Resource as FilamentResource;
+use Happenv\FilamentModelSearch\Support\FailureReports;
 use Happenv\ModelSearch\Facades\ModelSearches;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,7 +26,7 @@ final readonly class ResourceBinding
 {
     /**
      * @param  class-string  $searchClass
-     * @param  class-string<resource>  $resourceClass
+     * @param  class-string<FilamentResource>  $resourceClass
      * @param  class-string<Model>  $modelClass
      */
     public function __construct(
@@ -43,7 +44,7 @@ final readonly class ResourceBinding
     }
 
     /**
-     * @return class-string<resource>
+     * @return class-string<FilamentResource>
      */
     public function resourceClass(): string
     {
@@ -168,7 +169,7 @@ final readonly class ResourceBinding
             return ModelSearches::isReady($this->modelClass);
         }
 
-        // The cache is a convenience: a failing store is reported once and the core answers.
+        // The cache is a convenience: a failing store is reported once per worker and the core answers.
         $cache = null;
         $key = '';
         $cached = null;
@@ -180,7 +181,7 @@ final readonly class ResourceBinding
             $cache = Cache::store(is_string($store) ? $store : null);
             $cached = $cache->get($key);
         } catch (Throwable $e) {
-            report($e);
+            resolve(FailureReports::class)->reportOnce('readiness-cache', $e);
             $cache = null;
         }
 
@@ -194,7 +195,7 @@ final readonly class ResourceBinding
             try {
                 $cache->put($key, $ready, $seconds);
             } catch (Throwable $e) {
-                report($e);
+                resolve(FailureReports::class)->reportOnce('readiness-cache', $e);
             }
         }
 

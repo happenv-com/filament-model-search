@@ -5,6 +5,7 @@ declare(strict_types=1);
 return [
     'trigger' => 'Search records',
     'title' => 'Record search',
+    'search_label' => 'Search records',
     'placeholder' => 'Search records…',
     'hint' => 'Type at least two characters.',
     'search_every_stage' => 'Search all',

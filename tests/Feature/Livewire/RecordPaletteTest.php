@@ -405,3 +405,10 @@ it('shows the unavailable state when the server could log the phrase', function 
         ->assertSee(trans(SearchOutcome::Unavailable->heading()))
         ->assertDontSee(trans(SearchOutcome::Empty->heading()));
 });
+
+it('names the search field for screen readers', function (): void {
+    $this->signIn($this->allAbilities());
+
+    Livewire::test(RecordPalette::class)
+        ->assertSeeHtml('aria-label="'.e(trans('filament-model-search::record-palette.search_label')).'"');
+});

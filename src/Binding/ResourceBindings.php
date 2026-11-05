@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Happenv\FilamentModelSearch\Binding;
 
 use Filament\Facades\Filament;
-use Filament\Resources\Resource;
+use Filament\Resources\Resource as FilamentResource;
 use Happenv\FilamentModelSearch\Concerns\InteractsWithModelSearch;
 use Happenv\ModelSearch\Definition\ModelSearch;
 use Illuminate\Database\Eloquent\Model;
@@ -30,7 +30,7 @@ final class ResourceBindings
      * on the first search, not here, because bindings are made while panels register.
      *
      * @param  class-string  $searchClass
-     * @param  class-string<resource>  $resourceClass
+     * @param  class-string<FilamentResource>  $resourceClass
      *
      * @throws LogicException when the class is not a search definition, the definition searches another model than the resource shows, or the model is already bound to a different resource on an overlapping panel
      */
@@ -70,7 +70,7 @@ final class ResourceBindings
      */
     public function registerResource(string $resourceClass, ?string $panelId = null): void
     {
-        if (! is_subclass_of($resourceClass, Resource::class) || ! in_array(InteractsWithModelSearch::class, class_uses_recursive($resourceClass), true)) {
+        if (! is_subclass_of($resourceClass, FilamentResource::class) || ! in_array(InteractsWithModelSearch::class, class_uses_recursive($resourceClass), true)) {
             throw new LogicException(sprintf('%s is listed for the model search but does not use %s; add the trait, or bind it with FilamentModelSearch::resource().', $resourceClass, InteractsWithModelSearch::class));
         }
 

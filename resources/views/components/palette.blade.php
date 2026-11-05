@@ -1,0 +1,3 @@
+@props(['component'])
+
+@livewire($component)

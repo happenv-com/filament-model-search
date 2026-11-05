@@ -38,6 +38,9 @@ use Throwable;
 #[Isolate]
 final class RecordPalette extends Component
 {
+    /** The id of the palette's modal: the trigger and the keybindings open it by this id. */
+    public const string MODAL_ID = 'filament-model-search-record-palette';
+
     private const int MIN_LENGTH = 2;
 
     private const int MAX_LENGTH = 1000;
