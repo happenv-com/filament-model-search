@@ -7,6 +7,7 @@ use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Customer;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Support\SetIcon;
 use Happenv\ModelSearch\Postgres\Indexing\IndexState;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Log\Events\MessageLogged;
@@ -23,6 +24,7 @@ beforeEach(function (): void {
         'fixtures.order_scope' => null,
         'fixtures.customer_label' => null,
         'fixtures.order_details_customer' => null,
+        'fixtures.order_icon' => null,
     ]);
 });
 
@@ -412,3 +414,18 @@ it('names the search field for screen readers', function (): void {
     Livewire::test(RecordPalette::class)
         ->assertSeeHtml('aria-label="'.e(trans('filament-model-search::record-palette.search_label')).'"');
 });
+
+it('renders the navigation icon of a hit group, whether it is a string or a scalable icon enum', function (mixed $icon): void {
+    config(['fixtures.order_icon' => $icon]);
+    $this->signIn($this->allAbilities());
+    $this->createOrder('OR-ICON', '606060');
+    $this->indexAll();
+
+    Livewire::test(RecordPalette::class)->set('phrase', '606060')
+        ->assertOk()
+        ->assertSee('OR-ICON')
+        ->assertSeeHtml('<svg');
+})->with([
+    'string' => 'heroicon-o-users',
+    'scalable icon enum' => SetIcon::Users,
+]);

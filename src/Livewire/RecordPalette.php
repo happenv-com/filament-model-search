@@ -6,6 +6,8 @@ namespace Happenv\FilamentModelSearch\Livewire;
 
 use BackedEnum;
 use Filament\Facades\Filament;
+use Filament\Support\Contracts\ScalableIcon;
+use Filament\Support\Enums\IconSize;
 use Happenv\FilamentModelSearch\Binding\ResourceBinding;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\Support\HostScope;
@@ -335,9 +337,21 @@ final class RecordPalette extends Component
         return [
             'type' => $this->alias($binding),
             'label' => $binding->label(),
-            'icon' => $icon instanceof BackedEnum ? (string) $icon->value : $icon,
+            'icon' => $this->iconName($icon),
             'items' => $items,
         ];
+    }
+
+    /**
+     * The icon name the way Filament resolves it when it draws an icon, at the size the palette draws it.
+     */
+    private function iconName(string|BackedEnum|null $icon): ?string
+    {
+        return match (true) {
+            $icon instanceof ScalableIcon => $icon->getIconForSize(IconSize::Small),
+            $icon instanceof BackedEnum => (string) $icon->value,
+            default => $icon,
+        };
     }
 
     private function isFound(string $type, string $id): bool
