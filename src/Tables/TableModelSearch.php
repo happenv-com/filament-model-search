@@ -70,7 +70,7 @@ final class TableModelSearch
             return $table;
         }
 
-        // The macro closure is bound to the table, so its own empty state can be read back.
+        // Closure::call binds $this to the table, so its protected empty state can be read back.
         $previous = (fn (): array => [$this->emptyStateHeading, $this->emptyStateDescription])->call($table);
 
         $table

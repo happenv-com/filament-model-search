@@ -133,21 +133,21 @@ it('respects only()', function (): void {
     Livewire::test(ListOrders::class)->searchTable('zed@example.test')->assertCountTableRecords(1);
 });
 
-it('never returns a record outside the table query', function (): void {
+it('lets an orWhere in the table query never leak a row the phrase did not match', function (): void {
     $inside = $this->createOrder('OR8001', 'EXT-313131', ['state' => 'unshipped']);
-    $outsideScope = $this->createOrder('OR8002', 'EXT-313132', ['state' => 'shipped']);
-    $unrelated = $this->createOrder('OR8003', 'EXT-999000', ['state' => 'shipped']);
+    $otherMatch = $this->createOrder('OR8002', 'EXT-313132', ['state' => 'shipped']);
+    $notMatching = $this->createOrder('OR8003', 'EXT-999000', ['state' => 'shipped']);
     $this->indexAll();
 
-    // The table's own query carries an orWhere: the shipped order that does not match the phrase must stay out.
+    // The table's own query carries an orWhere: the shipped order that does not match the phrase must stay out, however the branches combine.
     config(['fixtures.order_table' => static fn (Table $table): Table => $table->modifyQueryUsing(
         static fn ($query) => $query->where('state', 'shipped')->orWhere('state', 'unshipped'),
     )]);
 
     Livewire::test(ListOrders::class)
         ->searchTable('EXT-3131')
-        ->assertCanSeeTableRecords([$inside, $outsideScope])
-        ->assertCanNotSeeTableRecords([$unrelated]);
+        ->assertCanSeeTableRecords([$inside, $otherMatch])
+        ->assertCanNotSeeTableRecords([$notMatching]);
 });
 
 it('keeps a table query with a custom select searchable', function (): void {
@@ -202,6 +202,7 @@ it('refuses non-string kinds', function (): void {
 
 it('counts only the records matching the phrase', function (): void {
     $this->createOrder('OR9001', 'EXT-424242');
+    $this->createOrder('OR9002', 'EXT-535353');
     $this->indexAll();
 
     $component = Livewire::test(ListOrders::class)->searchTable('424242');
