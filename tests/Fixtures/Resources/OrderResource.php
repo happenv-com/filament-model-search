@@ -31,9 +31,18 @@ final class OrderResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
-            TextColumn::make('signature')->searchable(),
+        $table = $table->columns([
+            TextColumn::make('signature')->searchable()->sortable(),
         ]);
+
+        // Tests shape the table through this hook, before the model search is wired.
+        $shape = config('fixtures.order_table');
+
+        if (is_callable($shape)) {
+            $table = $shape($table);
+        }
+
+        return $table->modelSearch(only: config('fixtures.order_only'));
     }
 
     /**
