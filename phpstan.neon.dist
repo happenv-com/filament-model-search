@@ -7,5 +7,4 @@ parameters:
     paths:
         - src
         - config
-    tmpDir: build/phpstan
     checkOctaneCompatibility: true

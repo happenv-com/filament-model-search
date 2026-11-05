@@ -15,6 +15,8 @@ final class ProductResource extends Resource
 {
     protected static ?string $model = Product::class;
 
+    protected static ?string $recordTitleAttribute = 'sku';
+
     public static function table(Table $table): Table
     {
         return $table->columns([

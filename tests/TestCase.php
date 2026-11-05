@@ -7,6 +7,7 @@ namespace Happenv\FilamentModelSearch\Tests;
 use BladeUI\Heroicons\BladeHeroiconsServiceProvider;
 use BladeUI\Icons\BladeIconsServiceProvider;
 use Filament\Actions\ActionsServiceProvider;
+use Filament\Facades\Filament;
 use Filament\FilamentServiceProvider;
 use Filament\Forms\FormsServiceProvider;
 use Filament\Infolists\InfolistsServiceProvider;
@@ -39,6 +40,8 @@ abstract class TestCase extends Orchestra
 
         // The whole test runs in one transaction: that is the baseline a drain may run at.
         config(['model-search.drain.allowed_transaction_level' => 1]);
+
+        Filament::setCurrentPanel('admin');
     }
 
     /**
@@ -58,14 +61,12 @@ abstract class TestCase extends Orchestra
         (new SearchIndexer($registry, $state))->drainNow();
     }
 
-    protected function signIn(bool $canViewAny = true): User
+    /**
+     * @param  list<string>  $abilities  For example `orders.viewAny`, `orders.view`.
+     */
+    protected function signIn(array $abilities = []): User
     {
-        $user = User::query()->create([
-            'name' => 'Tester',
-            'email' => fake()->unique()->safeEmail(),
-            'password' => 'secret',
-            'can_view_any' => $canViewAny,
-        ]);
+        $user = User::factory()->withAbilities($abilities)->create();
 
         $this->actingAs($user);
 
