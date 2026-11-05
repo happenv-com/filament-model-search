@@ -9,5 +9,5 @@ return [
     'too_broad' => ['heading' => 'Zu viele Treffer', 'description' => 'Zu viele Treffer — grenze den Suchbegriff ein.'],
     'index_building' => ['heading' => 'Suchindex wird aufgebaut', 'description' => 'Der Suchindex wird aufgebaut — die Ergebnisse können unvollständig sein.'],
     'rate_limited' => ['heading' => 'Zu viele Suchanfragen', 'description' => 'Zu viele Suchanfragen — warte einen Moment.'],
-    'unavailable' => ['heading' => 'Suche nicht verfügbar', 'description' => 'Die Suche ist noch nicht verfügbar.'],
+    'unavailable' => ['heading' => 'Suche nicht verfügbar', 'description' => 'Die Suche ist vorübergehend nicht verfügbar.'],
 ];

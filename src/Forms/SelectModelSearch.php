@@ -9,6 +9,7 @@ use Filament\Forms\Components\Select;
 use Filament\Support\Services\RelationshipJoiner;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\Support\HostScope;
+use Happenv\FilamentModelSearch\Support\ParentScopes;
 use Happenv\FilamentModelSearch\Support\ReadySearch;
 use Happenv\FilamentModelSearch\Support\SearchArguments;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
@@ -94,8 +95,9 @@ final class SelectModelSearch
         }
 
         $request = $searchClass::query($search)
-            ->within(self::host($related, $offered))
+            ->within(self::host($related, $offered), ParentScopes::for($related::class))
             ->forUser(Filament::auth()->user())
+            ->locale(app()->getLocale())
             ->limit($select->getOptionsLimit());
 
         if ($kinds !== null) {

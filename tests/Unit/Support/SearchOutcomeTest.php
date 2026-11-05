@@ -65,14 +65,21 @@ it('uses the documented english sentences', function (): void {
         ->and(trans(SearchOutcome::IndexBuilding->description(), [], 'en'))->toBe('The search index is being built — results may be incomplete.')
         ->and(trans(SearchOutcome::RateLimited->description(), [], 'en'))->toBe('Too many searches — wait a moment.')
         ->and(trans(SearchOutcome::Empty->description(), [], 'en'))->toBe('No records found.')
-        ->and(trans(SearchOutcome::Unavailable->description(), [], 'en'))->toBe('Search is not available yet.');
+        ->and(trans(SearchOutcome::Unavailable->description(), [], 'en'))->toBe('Search is temporarily unavailable.');
 });
 
-it('keeps identical key sets in every locale', function (): void {
-    $keys = fn (string $locale): array => array_keys(Arr::dot(require __DIR__."/../../../resources/lang/{$locale}/search-outcome.php"));
+it('keeps identical key sets in every language file of every locale', function (): void {
+    $root = __DIR__.'/../../../resources/lang';
+    $files = array_map(basename(...), glob($root.'/en/*.php') ?: []);
 
-    expect($keys('pl'))->toEqualCanonicalizing($keys('en'))
-        ->and($keys('de'))->toEqualCanonicalizing($keys('en'));
+    expect($files)->not->toBeEmpty();
+
+    foreach ($files as $file) {
+        $keys = static fn (string $locale): array => array_keys(Arr::dot(require "{$root}/{$locale}/{$file}"));
+
+        expect($keys('pl'))->toEqualCanonicalizing($keys('en'), $file)
+            ->and($keys('de'))->toEqualCanonicalizing($keys('en'), $file);
+    }
 });
 
 it('takes no placeholders so the phrase can never appear', function (SearchOutcome $outcome, string $locale): void {

@@ -9,5 +9,5 @@ return [
     'too_broad' => ['heading' => 'Zbyt wiele dopasowań', 'description' => 'Zbyt wiele dopasowań — zawęź frazę.'],
     'index_building' => ['heading' => 'Indeks wyszukiwania jest budowany', 'description' => 'Indeks wyszukiwania jest w budowie — wyniki mogą być niepełne.'],
     'rate_limited' => ['heading' => 'Zbyt wiele wyszukiwań', 'description' => 'Zbyt wiele wyszukiwań — poczekaj chwilę.'],
-    'unavailable' => ['heading' => 'Wyszukiwanie niedostępne', 'description' => 'Wyszukiwanie nie jest jeszcze dostępne.'],
+    'unavailable' => ['heading' => 'Wyszukiwanie niedostępne', 'description' => 'Wyszukiwanie jest chwilowo niedostępne.'],
 ];

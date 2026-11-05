@@ -298,3 +298,12 @@ it('refuses a definition of another model and non-string kinds', function (): vo
     expect(static fn (): Select => Select::make('c')->relationship('customer', 'name')->modelSearch(only: [1]))
         ->toThrow(InvalidArgumentException::class);
 });
+
+it('searches in the language of the viewer', function (): void {
+    $customer = $this->createCustomer('Mueller', 'mueller@example.test');
+    $this->indexAll();
+
+    app()->setLocale('de');
+
+    expect($this->customerSelect()->getSearchResults('Müller'))->toBe([$customer->id => 'Mueller']);
+});

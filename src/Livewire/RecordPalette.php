@@ -19,8 +19,6 @@ use Happenv\ModelSearch\Query\SearchResults;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Isolate;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -64,7 +62,7 @@ final class RecordPalette extends Component
         'capacity' => 0,
     ];
 
-    public function updatedPhrase(): void
+    public function updatedPhrase(#[\SensitiveParameter] mixed $value = null): void
     {
         // A new phrase starts over: similar names are asked for, never carried along.
         // "Results came from a stage" is an answer to this phrase: it starts over with it.
@@ -318,8 +316,7 @@ final class RecordPalette extends Component
 
             $title = $binding->title($result->model);
             $title = $title instanceof Htmlable ? strip_tags($title->toHtml()) : $title;
-            $relation = $result->match->via === null ? null : $this->relationLabel($result->model, $result->match->via);
-            $line = MatchLine::of($result->match, $title, $relation);
+            $line = MatchLine::forResult($result, $title);
 
             $items[] = [
                 'id' => (string) $result->model->getKey(),
@@ -338,22 +335,6 @@ final class RecordPalette extends Component
             'icon' => $icon instanceof BackedEnum ? (string) $icon->value : $icon,
             'items' => $items,
         ];
-    }
-
-    /**
-     * What the relation is called to the user: the label of the resource that shows the related model,
-     * else the relation's own name.
-     */
-    private function relationLabel(Model $model, string $relation): string
-    {
-        try {
-            $related = $model->{$relation}();
-            $parent = $related instanceof Relation ? resolve(ResourceBindings::class)->for($related->getRelated()::class) : null;
-        } catch (Throwable) {
-            $parent = null;
-        }
-
-        return $parent instanceof ResourceBinding ? Str::ucfirst($parent->modelLabel()) : Str::headline($relation);
     }
 
     private function isFound(string $type, string $id): bool

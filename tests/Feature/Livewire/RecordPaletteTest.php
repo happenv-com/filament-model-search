@@ -16,8 +16,6 @@ use Livewire\Livewire;
 
 covers(RecordPalette::class);
 
-const ALL_ABILITIES = ['orders.viewAny', 'orders.view', 'customers.viewAny', 'customers.update'];
-
 beforeEach(function (): void {
     config([
         'filament-model-search.readiness_cache_seconds' => 0,
@@ -37,7 +35,7 @@ $titles = static fn (array $found): array => array_merge(...array_map(
 ));
 
 it('groups results per resource with exact hits first and at most per_group each', function () use ($titles): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     foreach (range(1, 7) as $i) {
         $this->createOrder('OR-'.$i, '555123-'.$i);
     }
@@ -55,7 +53,7 @@ it('groups results per resource with exact hits first and at most per_group each
 });
 
 it('hides groups the user may not access, evaluated per search', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createOrder('OR-9', '999001');
     $this->createCustomer('Nine Holder', null, '999001');
     $this->indexAll();
@@ -73,7 +71,7 @@ it('hides groups the user may not access, evaluated per search', function (): vo
 });
 
 it('offers search every stage when results came from a stage', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createOrder('OR-OPEN', '424242-A');
     $this->createOrder('OR-SHIPPED', '424242-B', ['state' => 'shipped']);
     $this->indexAll();
@@ -137,7 +135,7 @@ it('ignores a request for similar names it did not offer', function (): void {
 });
 
 it('enter opens the single exact hit', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $customer = $this->createCustomer('Only Exact', null, '777888');
     $this->createOrder('OR-777', '777888-X');
     $this->indexAll();
@@ -148,7 +146,7 @@ it('enter opens the single exact hit', function (): void {
 });
 
 it('enter opens nothing when there is no single exact hit', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createCustomer('Twin One', null, '666555');
     $this->createCustomer('Twin Two', null, '666555');
     $this->indexAll();
@@ -157,7 +155,7 @@ it('enter opens nothing when there is no single exact hit', function (): void {
 });
 
 it('open refuses a record that is not in the current results', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $shown = $this->createCustomer('Shown Person', null, '313131');
     $other = $this->createCustomer('Other Person', null, '979797');
     $this->indexAll();
@@ -171,7 +169,7 @@ it('open refuses a record that is not in the current results', function (): void
 });
 
 it('open checks access again when it is called', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $customer = $this->createCustomer('Revoked Person', null, '212121');
     $this->indexAll();
 
@@ -183,7 +181,7 @@ it('open checks access again when it is called', function (): void {
 });
 
 it('open stays inside the scope of the resource, orWhere included', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $inside = $this->createCustomer('Inside Person', 'inside@a.test', '414141');
     $outside = $this->createCustomer('Outside Person', 'outside@a.test', '414141');
     $this->indexAll();
@@ -200,7 +198,7 @@ it('open stays inside the scope of the resource, orWhere included', function ():
 });
 
 it('keeps what it found out of the reach of the client', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createCustomer('Locked Person', null, '151515');
     $this->indexAll();
 
@@ -210,7 +208,7 @@ it('keeps what it found out of the reach of the client', function (): void {
 });
 
 it('shows the empty state', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->indexAll();
 
     Livewire::test(RecordPalette::class)->set('phrase', 'nothingmatchesthis')
@@ -219,7 +217,7 @@ it('shows the empty state', function (): void {
 });
 
 it('asks for more characters before it searches', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createCustomer('One Letter', null, 'x');
     $this->indexAll();
     $component = Livewire::test(RecordPalette::class)->set('phrase', ' x ');
@@ -254,7 +252,7 @@ it('puts a notice above results that came back while part of the search ran out 
 });
 
 it('shows results and the index-building line while a rebuild is pending', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createOrder('OR-BUILD', '454545-A');
     $this->indexAll();
     (new IndexState)->markForRebuild(['order']);
@@ -265,7 +263,7 @@ it('shows results and the index-building line while a rebuild is pending', funct
 });
 
 it('never errors for a phrase that is only emoji or shaped like an identifier', function (string $phrase): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createOrder('OR-1', 'EXT-1');
     $this->indexAll();
 
@@ -312,7 +310,7 @@ it('follows a parent only through the scope of its own resource', function (): v
     Livewire::test(RecordPalette::class)->set('phrase', 'parent.only@a.test')->assertDontSee('OR-CHILD');
 
     // With the customers listed too, the order is found through its customer and says so.
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $found = Livewire::test(RecordPalette::class)->set('phrase', 'parent.only@a.test')->get('found');
     $orderGroup = collect($found['groups'])->firstWhere('type', 'order');
 
@@ -321,7 +319,7 @@ it('follows a parent only through the scope of its own resource', function (): v
 });
 
 it('keeps the phrase out of query listeners and logs', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createCustomer('Secret Person', null, '909090');
     $this->indexAll();
     $phrase = 'zqxwvsecretphrase';
@@ -341,7 +339,7 @@ it('keeps the phrase out of query listeners and logs', function (): void {
 });
 
 it('binds Enter to the search input only, so links and buttons keep their own', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
 
     $html = Livewire::test(RecordPalette::class)->html();
 
@@ -353,14 +351,14 @@ it('binds Enter to the search input only, so links and buttons keep their own', 
 });
 
 it('rejects a client that sets the flags only the server may set', function (string $flag): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $component = Livewire::test(RecordPalette::class)->set('phrase', 'abc');
 
     expect(fn () => $component->set($flag, true))->toThrow(Exception::class, "Cannot update locked property: [{$flag}]");
 })->with(['similar', 'everyStage']);
 
 it('starts the stages over with a new phrase', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createOrder('OR-OPEN', '525252-A');
     $this->createOrder('OR-SHIPPED', '525252-B', ['state' => 'shipped']);
     $this->indexAll();
@@ -379,7 +377,7 @@ it('names the parent through the label of its resource, localised', function ():
     $this->createOrder('OR-VIA', null, ['customer_id' => $customer->getKey()]);
     $this->indexAll();
 
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $found = Livewire::test(RecordPalette::class)->set('phrase', 'hidden.parent@a.test')->get('found');
     $order = collect($found['groups'])->firstWhere('type', 'order')['items'][0];
 
@@ -387,7 +385,7 @@ it('names the parent through the label of its resource, localised', function ():
 });
 
 it('shows the rate-limited state', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createOrder('OR-RATE', '616161-A');
     $this->indexAll();
     config(['model-search.rate_limit.max_attempts' => 1]);
@@ -398,7 +396,7 @@ it('shows the rate-limited state', function (): void {
 });
 
 it('shows the unavailable state when the server could log the phrase', function (): void {
-    $this->signIn(ALL_ABILITIES);
+    $this->signIn($this->allAbilities());
     $this->createOrder('OR-PRIV', '717171-A');
     $this->indexAll();
     DB::statement("SET log_statement = 'all'");

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Filament\Facades\Filament;
+use Filament\Panel;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Happenv\FilamentModelSearch\FilamentModelSearchPlugin;
@@ -59,4 +60,17 @@ it('offers nothing to a guest or to a user who may open no searched resource, ev
 
     $this->signIn(['customers.viewAny', 'customers.update']);
     expect((string) FilamentView::renderHook(PanelsRenderHook::BODY_END))->toContain('filament-model-search.record-palette');
+});
+
+it('hooks the palette once per panel however often the plugin registers', function (): void {
+    $panel = Panel::make()->id('registered-twice');
+    $plugin = FilamentModelSearchPlugin::make();
+
+    $plugin->register($panel);
+    $plugin->register($panel);
+
+    $hooks = (fn (): array => $this->renderHooks)->call($panel);
+
+    // The trigger and the component: two hooks, not four.
+    expect(array_sum(array_map(static fn (array $scoped): int => array_sum(array_map(count(...), $scoped)), $hooks)))->toBe(2);
 });

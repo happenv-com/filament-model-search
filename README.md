@@ -93,7 +93,7 @@ Binding the same pair twice changes nothing. Binding a model to a second, differ
 
 The core is not asked whether it knows the definition when you bind: bindings are made while panels register, so an unknown definition fails on the first search instead.
 
-**Access is never decided at registration.** Every query asks `canAccess() && canViewAny()` of the resource for the current user again, so with one resource registered once per worker, a user who may not open it never gets it searched, and another user in the same process does.
+**Access is never decided at registration.** The palette and global search ask `canAccess() && canViewAny()` of the resource for the current user on every call, so with one resource registered once per worker, a user who may not open it never gets it searched, and another user in the same process does. Tables and selects follow native Filament: the page or the form that shows them is the gate.
 
 ## What happens until the index is ready
 
@@ -121,6 +121,12 @@ public static function table(Table $table): Table
 ```
 
 `modelSearch(?string $searchClass = null, ?array $only = null)` turns the table's global search box into the core's search. `$searchClass` defaults to the definition bound to the table's model; passing one that searches another model throws an `InvalidArgumentException`. `$only` restricts the search to fields of the given kinds (`->modelSearch(only: ['number', 'email'])`). Search per column is not touched.
+
+A table that has no bound definition and is given no `$searchClass` stays native: `modelSearch()` returns it unchanged.
+
+**Viewer's language.** Tables, selects, global search and the palette all search in the language of the current request (`app()->getLocale()`), so `Müller` also finds `mueller` for `de`.
+
+**Fields found through a parent (`via`).** An order found by its customer's e-mail is found only through the customer's scope: the parent resource must be bound on the current panel and the user must be able to open it, otherwise nothing is found through it. The scopes are those of the bound resources and are asked on every search, for tables, selects and global search as for the palette.
 
 Call order matters:
 
@@ -191,6 +197,7 @@ List the resource in the plugin (see [Binding resources](#binding-resources)). T
 
 - Until the index serves the model, the resource's global search stays Filament's own.
 - Once it does, the index answers inside `getGlobalSearchResults()`, in the core's ranking order, within `getGlobalSearchEloquentQuery()` (so the resource's own scope, soft deletes and tenant constraints apply), up to `getGlobalSearchResultsLimit()`.
+- **Every stage is searched at once** (`withoutStages()`), as native Filament global search returns every record: this surface has no room for a note saying that only the open orders were searched. The palette, which has the room, starts with the first stage and offers "Search all".
 - Titles, urls, details and actions are the resource's own (`getGlobalSearchResultTitle()`, `getGlobalSearchResultUrl()`, `getGlobalSearchResultDetails()`, `getGlobalSearchResultActions()`); the records are loaded with the scope's own eager loads.
 - A line telling what matched is added to the details: the value when the core's reveal rule lets the viewer see it, and otherwise only **"Matched by: <field>"**. A value that equals the title adds nothing, and a native detail of the same name is kept.
 - `modifyGlobalSearchQuery()` is **not applied** on the index path: it works on Filament's native `ILIKE` query, which does not exist there. Put constraints into `getGlobalSearchEloquentQuery()` instead, or into the core's definition.
@@ -203,7 +210,7 @@ A global search has no room for a message. A search that timed out, was refused,
 A modal that searches every bound resource at once (one `SearchQuery::palette()` call, so one rate-limit charge), opened from a button next to the panel's global search and by a keyboard shortcut. `FilamentModelSearchPlugin::make()->palette(false)` or `palette.enabled = false` switches it off. It is also absent for a user who may open none of the searched resources, and that is decided when the page renders, not at boot.
 
 - Type at least two characters. The search is debounced (`palette.debounce_ms`).
-- Groups follow the navigation order of the resources, except that a group holding an exact hit comes first; at most `palette.per_group` records each. Each record shows the resource's own title, icon and url, and what matched (the value only when the core lets the viewer see it; otherwise "Matched by: <field>").
+- Groups follow the navigation order of the resources, except that a group holding an exact hit comes first; at most `palette.per_group` records each. Each group shows the icon of its resource, each record the resource's own title and url, and what matched (the value only when the core lets the viewer see it; otherwise "Matched by: <field>").
 - A record found through a related one (a `via` field) is told by the related resource's name. It is found only if the user may also open the related resource: the parent's scope is the one of its resource, filled in by the palette. Otherwise nothing is found through it.
 - **Enter** opens the record when exactly one hit of the whole palette is an exact one.
 - **"Search all"** appears when the answer came from a stage (for example only open orders): it repeats the search over every stage. It applies to the phrase on screen and is reset when the phrase changes, so the user asks again for the next phrase.

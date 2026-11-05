@@ -10,6 +10,7 @@ use Filament\GlobalSearch\GlobalSearchResult;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\Support\HostScope;
 use Happenv\FilamentModelSearch\Support\MatchLine;
+use Happenv\FilamentModelSearch\Support\ParentScopes;
 use Happenv\FilamentModelSearch\Support\ReadySearch;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Illuminate\Contracts\Support\Htmlable;
@@ -59,8 +60,11 @@ trait InteractsWithModelSearch
 
         try {
             $results = $searchClass::query($search)
-                ->within(HostScope::of($scope))
+                ->within(HostScope::of($scope), ParentScopes::for(static::getModel()))
                 ->forUser(Filament::auth()->user())
+                ->locale(app()->getLocale())
+                // Native global search returned every stage and this surface has no room for a stage note.
+                ->withoutStages()
                 ->limit(static::getGlobalSearchResultsLimit())
                 ->get();
         } catch (Throwable $exception) {
@@ -94,10 +98,9 @@ trait InteractsWithModelSearch
 
             $title = static::getGlobalSearchResultTitle($record);
             $details = static::getGlobalSearchResultDetails($record);
-            $match = $result->match;
 
             // What matched is told; a native detail of the same name stays.
-            $line = MatchLine::of($match, $title instanceof Htmlable ? strip_tags($title->toHtml()) : $title);
+            $line = MatchLine::forResult($result, $title instanceof Htmlable ? strip_tags($title->toHtml()) : $title);
 
             if ($line !== null) {
                 $details[$line[0]] ??= $line[1];

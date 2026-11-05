@@ -7,6 +7,7 @@ namespace Happenv\FilamentModelSearch\Tables;
 use Filament\Facades\Filament;
 use Filament\Tables\Table;
 use Happenv\FilamentModelSearch\Support\HostScope;
+use Happenv\FilamentModelSearch\Support\ParentScopes;
 use Happenv\FilamentModelSearch\Support\ReadySearch;
 use Happenv\FilamentModelSearch\Support\SearchArguments;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
@@ -53,7 +54,6 @@ final class TableModelSearch
             }
         }
 
-        /** @var list<string>|null $kinds */
         $state = new TableSearchState;
 
         $searchClass = self::searchClass($table, $searchClass);
@@ -105,8 +105,9 @@ final class TableModelSearch
         $scope = HostScope::of($query);
 
         $request = $searchClass::query($search)
-            ->within($scope)
-            ->forUser(Filament::auth()->user());
+            ->within($scope, ParentScopes::for($searchClass::model()))
+            ->forUser(Filament::auth()->user())
+            ->locale(app()->getLocale());
 
         if ($only !== null) {
             $request = $request->only($only);

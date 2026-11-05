@@ -27,6 +27,9 @@ final class FilamentModelSearchPlugin implements Plugin
 
     private bool $palette = true;
 
+    /** @var list<string> */
+    private array $hookedPanels = [];
+
     public static function make(): static
     {
         return new self;
@@ -75,6 +78,13 @@ final class FilamentModelSearchPlugin implements Plugin
         foreach ($this->resources as $resource) {
             $bindings->registerResource($resource, $panel->getId());
         }
+
+        // Hooked once per panel, however often the plugin registers.
+        if (in_array($panel->getId(), $this->hookedPanels, true)) {
+            return;
+        }
+
+        $this->hookedPanels[] = $panel->getId();
 
         // Always hooked, decided when the page renders: the user, the config and the bindings may all differ from the boot.
         $panel->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): string => $this->paletteIsOffered()

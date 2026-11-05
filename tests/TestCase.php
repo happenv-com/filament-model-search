@@ -21,6 +21,8 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Filament\Tables\TablesServiceProvider;
 use Filament\Widgets\WidgetsServiceProvider;
+use Happenv\FilamentModelSearch\Binding\ResourceBinding;
+use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\FilamentModelSearchServiceProvider;
 use Happenv\FilamentModelSearch\Tests\Fixtures\AdminPanelProvider;
 use Happenv\FilamentModelSearch\Tests\Fixtures\FixtureSearchServiceProvider;
@@ -30,9 +32,6 @@ use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\User;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ListOrders;
 use Happenv\ModelSearch\ModelSearchServiceProvider;
-use Happenv\ModelSearch\Postgres\Indexing\IndexState;
-use Happenv\ModelSearch\Postgres\Indexing\SearchIndexer;
-use Happenv\ModelSearch\Registry\ModelSearchRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -57,19 +56,37 @@ abstract class TestCase extends Orchestra
 
     /**
      * Brings the index up to date with the rows the test created, installing the types that were not.
+     *
+     * Only through the commands of the core: `model-search:sync` installs, `model-search:drain` indexes.
      */
     protected function indexAll(): void
     {
-        $registry = resolve(ModelSearchRegistry::class);
-        $state = new IndexState;
+        $this->artisan('model-search:sync')->assertSuccessful();
+        $this->artisan('model-search:drain')->assertSuccessful();
+    }
 
-        foreach ($registry->all() as $definition) {
-            if ($state->find($definition->morphAlias) === null) {
-                $state->recordInstall($definition);
-            }
-        }
+    /**
+     * The abilities of a viewer who may use every resource of the fixture panel.
+     *
+     * @return list<string>
+     */
+    protected function allAbilities(): array
+    {
+        return ['orders.viewAny', 'orders.view', 'customers.viewAny', 'customers.update'];
+    }
 
-        (new SearchIndexer($registry, $state))->drainNow();
+    /**
+     * The binding a fresh registry makes of a definition and a resource.
+     *
+     * @param  class-string  $search
+     * @param  class-string<\Filament\Resources\Resource>  $resource
+     */
+    protected function bindingOf(string $search, string $resource): ResourceBinding
+    {
+        $bindings = new ResourceBindings;
+        $bindings->register($search, $resource);
+
+        return $bindings->all()[0];
     }
 
     /**

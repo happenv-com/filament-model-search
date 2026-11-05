@@ -9,8 +9,6 @@ use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ListOrders;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\CustomerSearch;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
-use Happenv\ModelSearch\Postgres\Indexing\IndexState;
-use Happenv\ModelSearch\Registry\ModelSearchRegistry;
 use Livewire\Livewire;
 
 covers(TableModelSearch::class);
@@ -212,12 +210,45 @@ it('counts only the records matching the phrase', function (): void {
 
 it('starts using the index without a restart once the type becomes ready', function (): void {
     $target = $this->createOrder('OR9101', 'EXT-737373');
-    $registry = resolve(ModelSearchRegistry::class);
 
     Livewire::test(ListOrders::class)->searchTable('737373')->assertCountTableRecords(0);
 
-    new IndexState()->recordInstall($registry->for(Order::class));
     $this->indexAll();
 
     Livewire::test(ListOrders::class)->searchTable('737373')->assertCanSeeTableRecords([$target]);
+});
+
+it('finds an order through its customer when the customer resource is accessible', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view', 'customers.viewAny']);
+    $customer = $this->createCustomer('Alice Smith', 'alice@parent.test');
+    $target = $this->createOrder('OR7001', null, ['customer_id' => $customer->id]);
+    $other = $this->createOrder('OR7002');
+    $this->indexAll();
+
+    Livewire::test(ListOrders::class)
+        ->searchTable('alice@parent.test')
+        ->assertCanSeeTableRecords([$target])
+        ->assertCanNotSeeTableRecords([$other]);
+});
+
+it('does not follow a customer the user may not open', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view']);
+    $customer = $this->createCustomer('Alice Smith', 'alice@parent.test');
+    $this->createOrder('OR7101', null, ['customer_id' => $customer->id]);
+    $this->indexAll();
+
+    Livewire::test(ListOrders::class)
+        ->searchTable('alice@parent.test')
+        ->assertCountTableRecords(0);
+});
+
+it('searches in the language of the viewer', function (): void {
+    $target = $this->createOrder('OR7201', null, ['customer_name' => 'Mueller']);
+    $this->indexAll();
+
+    app()->setLocale('de');
+
+    Livewire::test(ListOrders::class)
+        ->searchTable('Müller')
+        ->assertCanSeeTableRecords([$target]);
 });

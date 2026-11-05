@@ -170,3 +170,54 @@ it('shows found records whatever the flags of the answer say', function (): void
     expect(OrderSearch::query('EXT-323232')->within(OrderResource::getGlobalSearchEloquentQuery())->forUser(null)->get()->indexBuilding)->toBeTrue()
         ->and($this->globalTitles(OrderResource::class, 'EXT-323232'))->toBe(['OR6001']);
 });
+
+it('finds an order through its customer when the customer resource is accessible', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view', 'customers.viewAny']);
+    $customer = $this->createCustomer('Alice Smith', 'alice@parent.test');
+    $this->createOrder('OR7001', null, ['customer_id' => $customer->id]);
+    $this->createOrder('OR7002');
+    $this->indexAll();
+
+    expect($this->globalTitles(OrderResource::class, 'alice@parent.test'))->toBe(['OR7001']);
+});
+
+it('does not follow a customer the user may not open', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view']);
+    $customer = $this->createCustomer('Alice Smith', 'alice@parent.test');
+    $this->createOrder('OR7101', null, ['customer_id' => $customer->id]);
+    $this->indexAll();
+
+    expect($this->globalTitles(OrderResource::class, 'alice@parent.test'))->toBe([]);
+});
+
+it('names the relation a result was found through by the label of its resource', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view', 'customers.viewAny']);
+    config(['fixtures.customer_label' => 'Klient']);
+    $customer = $this->createCustomer('Alice Smith', 'alice@parent.test');
+    $this->createOrder('OR7301', null, ['customer_id' => $customer->id]);
+    $this->indexAll();
+
+    $result = OrderResource::getGlobalSearchResults('alice@parent.test')->first();
+
+    // The customer's e-mail is hidden from this viewer, so only the relation is told, by the resource's label.
+    expect($result->details[trans('filament-model-search::match-line.matched_by')])->toBe('Klient');
+});
+
+it('searches in the language of the viewer', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view']);
+    $this->createOrder('OR7201', null, ['customer_name' => 'Mueller']);
+    $this->indexAll();
+
+    app()->setLocale('de');
+
+    expect($this->globalTitles(OrderResource::class, 'Müller'))->toBe(['OR7201']);
+});
+
+it('returns the orders of every stage', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view']);
+    $this->createOrder('OR7401', '646464-A');
+    $this->createOrder('OR7402', '646464-B', ['state' => 'shipped']);
+    $this->indexAll();
+
+    expect($this->globalTitles(OrderResource::class, '646464'))->toEqualCanonicalizing(['OR7401', 'OR7402']);
+});
