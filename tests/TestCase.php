@@ -19,6 +19,7 @@ use Filament\Widgets\WidgetsServiceProvider;
 use Happenv\FilamentModelSearch\FilamentModelSearchServiceProvider;
 use Happenv\FilamentModelSearch\Tests\Fixtures\AdminPanelProvider;
 use Happenv\FilamentModelSearch\Tests\Fixtures\FixtureSearchServiceProvider;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\User;
 use Happenv\ModelSearch\ModelSearchServiceProvider;
 use Happenv\ModelSearch\Postgres\Indexing\IndexState;
@@ -59,6 +60,14 @@ abstract class TestCase extends Orchestra
         }
 
         (new SearchIndexer($registry, $state))->drainNow();
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     */
+    protected function createOrder(string $signature, ?string $external = null, array $extra = []): Order
+    {
+        return Order::query()->create(['signature' => $signature, 'external_number' => $external, ...$extra]);
     }
 
     /**

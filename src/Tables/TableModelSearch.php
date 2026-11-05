@@ -10,6 +10,7 @@ use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Happenv\ModelSearch\Definition\ModelSearch;
 use Happenv\ModelSearch\Facades\ModelSearches;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
@@ -27,26 +28,41 @@ final class TableModelSearch
      */
     public function register(): void
     {
-        Table::macro('modelSearch', function (?string $searchClass = null, ?array $only = null): Table {
-            /** @var Table $this */
-            return TableModelSearch::configure($this, $searchClass, $only); // @phpstan-ignore varTag.nativeType (Filament rebinds the macro closure to the table)
-        });
+        Table::macro('modelSearch', fn (?string $searchClass = null, ?array $only = null): Table => TableModelSearch::configure($this, $searchClass, $only));
     }
 
     /**
+     * Call it after the table's query and after any empty state of your own: the heading and the description
+     * you set earlier are kept and shown whenever the search did not fail.
+     *
      * @param  string|null  $searchClass  A search definition class; defaults to the one bound to the table's model.
-     * @param  array<array-key, mixed>|null  $only  Restricts the search to fields of these kinds.
+     * @param  array<array-key, mixed>|null  $only  Restricts the search to fields of these kinds; empty means every kind.
+     *
+     * @throws InvalidArgumentException when the class is not a definition of the table's model, or a kind is not a string
      */
     public static function configure(Table $table, ?string $searchClass = null, ?array $only = null): Table
     {
-        if ($searchClass !== null && ! is_subclass_of($searchClass, ModelSearch::class)) {
-            throw new InvalidArgumentException(sprintf('%s is not a search definition: it must extend %s.', $searchClass, ModelSearch::class));
+        if ($searchClass !== null) {
+            if (! is_subclass_of($searchClass, ModelSearch::class)) {
+                throw new InvalidArgumentException(sprintf('%s is not a search definition: it must extend %s.', $searchClass, ModelSearch::class));
+            }
+
+            $tableModel = $table->getModel();
+
+            if ($tableModel !== null && $searchClass::model() !== $tableModel) {
+                throw new InvalidArgumentException(sprintf('%s searches %s but the table shows %s.', $searchClass, $searchClass::model(), $tableModel));
+            }
         }
 
-        $only = $only === null ? null : array_values(array_filter($only, is_string(...)));
+        foreach ($only ?? [] as $kind) {
+            if (! is_string($kind)) {
+                throw new InvalidArgumentException('The kinds given to modelSearch() must be strings.');
+            }
+        }
 
-        $state = resolve(TableSearchState::class);
-        $state->record(null);
+        $kinds = $only === null || $only === [] ? null : array_values($only);
+        /** @var list<string>|null $kinds */
+        $state = new TableSearchState;
 
         $searchClass = self::searchClass($table, $searchClass);
 
@@ -54,13 +70,16 @@ final class TableModelSearch
             return $table;
         }
 
+        // The macro closure is bound to the table, so its own empty state can be read back.
+        $previous = (fn (): array => [$this->emptyStateHeading, $this->emptyStateDescription])->call($table);
+
         $table
             ->searchable()
-            ->searchUsing(static function (Builder $query, #[\SensitiveParameter] string $search) use ($searchClass, $only, $state): void {
-                self::narrow($query, $search, $searchClass, $only, $state);
+            ->searchUsing(static function (Builder $query, #[\SensitiveParameter] string $search) use ($searchClass, $kinds, $state): void {
+                self::narrow($query, $search, $searchClass, $kinds, $state);
             })
-            ->emptyStateHeading(static fn ($livewire): ?string => self::describe($livewire, $state, heading: true))
-            ->emptyStateDescription(static fn ($livewire): ?string => self::describe($livewire, $state, heading: false));
+            ->emptyStateHeading(static fn ($livewire): string|Htmlable|null => self::describe($livewire, $state, heading: true) ?? $table->evaluate($previous[0]))
+            ->emptyStateDescription(static fn ($livewire): string|Htmlable|null => self::describe($livewire, $state, heading: false) ?? $table->evaluate($previous[1]));
 
         return $table;
     }
@@ -103,7 +122,10 @@ final class TableModelSearch
         $state->record(null);
 
         // The core snapshots what it is given, so the scope never sees the narrowing; an ordering has no meaning in a scope.
+        // Its columns are reset too: a select (withCount, addSelect) changes what a row carries, not which rows are in scope.
         $scope = $query->clone()->reorder();
+        $scope->getQuery()->columns = null;
+        $scope->getQuery()->setBindings([], 'select');
 
         $request = $searchClass::query($search)
             ->within($scope)
