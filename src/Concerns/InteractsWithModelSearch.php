@@ -97,7 +97,7 @@ trait InteractsWithModelSearch
 
             if ($match->value === null) {
                 // The viewer may not see the value: what matched is still told, the value is not.
-                $details[trans('filament-model-search::global-search.matched_by')] ??= $match->label;
+                $details[trans('filament-model-search::interacts-with-model-search.matched_by')] ??= $match->label;
             } elseif ($match->value !== ($title instanceof Htmlable ? strip_tags($title->toHtml()) : $title)) {
                 // A value equal to the title adds nothing, and a native detail of the same name stays.
                 $details[$match->label] ??= $match->value;
