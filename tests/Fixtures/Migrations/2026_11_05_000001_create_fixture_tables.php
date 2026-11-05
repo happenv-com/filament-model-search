@@ -26,6 +26,7 @@ return new class extends Migration
             $table->text('phone')->nullable();
             $table->boolean('active')->default(true);
             $table->text('code')->nullable();
+            $table->jsonb('data')->nullable();
             $table->unsignedBigInteger('referrer_id')->nullable();
             $table->timestampsTz(6);
         });

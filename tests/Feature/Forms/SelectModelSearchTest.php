@@ -240,6 +240,41 @@ it('takes the limit of the relationship query', function (): void {
     expect($this->customerSelect()->getSearchResults('cap'))->toHaveCount(2);
 });
 
+it('labels results from a json title attribute', function (): void {
+    $customer = $this->createCustomer('Json Person', 'json@example.test', null, ['data' => ['title' => 'Json Title']]);
+    $this->indexAll();
+    config(['fixtures.customer_select' => static fn (Select $select): Select => $select->relationship('customer', 'data->title')->modelSearch()]);
+
+    expect($this->customerSelect()->getSearchResults('json@example.test'))->toBe([$customer->id => 'Json Title']);
+});
+
+it('keeps the key restriction when the relationship callback returns a new query', function (): void {
+    $this->createCustomer('New One', 'new1@example.test');
+    $second = $this->createCustomer('New Two', 'new2@example.test');
+    $this->indexAll();
+    // A fresh query: it knows nothing of the keys the search ranked, unless the restriction is added after it.
+    config(['fixtures.customer_select' => static fn (Select $select): Select => $select
+        ->relationship('customer', 'name', static fn (Builder $query): Builder => Customer::query()->where('email', 'like', '%new%'))
+        ->modelSearch()]);
+
+    $loads = $this->loadingQueries(fn () => expect($this->customerSelect()->getSearchResults('new2@example.test'))->toBe([$second->id => 'New Two']));
+
+    expect($loads)->toHaveCount(1)
+        ->and($loads[0]['query'])->toContain('"customers"."id" in (');
+});
+
+it('skips a ranked record whose option key is empty', function (): void {
+    $keyed = $this->createCustomer('Nil Keyed', 'nil1@example.test', null, ['code' => 'C-NIL']);
+    $this->createCustomer('Nil Unkeyed', 'nil2@example.test');
+    $this->indexAll();
+    config(['fixtures.customer_select' => static fn (Select $select): Select => $select->relationship('customerByCode', 'name')->modelSearch()]);
+
+    $loads = $this->loadingQueries(fn () => expect($this->customerSelect()->getSearchResults('nil'))->toBe(['C-NIL' => 'Nil Keyed']));
+
+    expect($loads)->toHaveCount(1)
+        ->and($loads[0]['bindings'])->toBe(['C-NIL']);
+});
+
 it('starts using the index without a restart once the type becomes ready', function (): void {
     $customer = $this->createCustomer('Late Bloomer', 'late@example.test');
     $select = $this->customerSelect();

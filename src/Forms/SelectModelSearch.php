@@ -52,7 +52,7 @@ final class SelectModelSearch
 
         $kinds = SearchArguments::validate($searchClass, $only);
 
-        return $select->getSearchResultsUsing(static fn (Select $component, ?string $search): array => self::search($component, (string) $search, $searchClass, $kinds, $stages) ?? $component->getSearchResultsFromRelationship($search));
+        return $select->getSearchResultsUsing(static fn (Select $component, #[\SensitiveParameter] ?string $search): array => self::search($component, (string) $search, $searchClass, $kinds, $stages) ?? $component->getSearchResultsFromRelationship($search));
     }
 
     /**
@@ -123,7 +123,12 @@ final class SelectModelSearch
         $ranked = [];
 
         foreach ($results as $result) {
-            $ranked[] = $result->model->getAttribute($keyName);
+            $key = $result->model->getAttribute($keyName);
+
+            // A record without an option key cannot be offered.
+            if ($key !== null) {
+                $ranked[] = $key;
+            }
         }
 
         if ($ranked === []) {
@@ -132,6 +137,7 @@ final class SelectModelSearch
 
         // Labelled from the records the relationship query shapes (withCount, addSelect, joins), as Filament does.
         $labelled = self::relationshipQuery($select, $relationship, $search, $qualifiedKey, $ranked)->get()
+            ->filter(static fn (Model $record): bool => $record->getAttribute($keyName) !== null)
             ->mapWithKeys(static fn (Model $record): array => [$record->getAttribute($keyName) => self::label($select, $record)]);
 
         $options = [];
@@ -165,12 +171,13 @@ final class SelectModelSearch
             $query->where($record->getQualifiedKeyName(), '!=', $record->getKey());
         }
 
-        if ($keys !== null && $qualifiedKey !== null) {
-            $query->whereIn($qualifiedKey, $keys);
-        }
-
         if ($modify !== null) {
             $query = $select->evaluate($modify, ['query' => $query, 'search' => $search]) ?? $query;
+        }
+
+        // After the callback, which may hand back a new query: the restriction must survive it.
+        if ($keys !== null && $qualifiedKey !== null) {
+            $query->whereIn($qualifiedKey, $keys);
         }
 
         if ($keys !== null) {

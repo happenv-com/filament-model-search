@@ -125,6 +125,27 @@ abstract class TestCase extends Orchestra
     }
 
     /**
+     * The statements run on the customers table that restrict it to a list of keys, while the callback runs.
+     *
+     * @return list<array{query: string, bindings: array<int, mixed>}>
+     */
+    protected function loadingQueries(Closure $callback): array
+    {
+        $loads = [];
+
+        DB::listen(static function ($query) use (&$loads): void {
+            // A plain list of placeholders, not a subquery: the statement that loads the ranked keys.
+            if (preg_match('/"customers"\."(id|code)" in \(\?(, \?)*\)/', $query->sql) === 1) {
+                $loads[] = ['query' => $query->sql, 'bindings' => $query->bindings];
+            }
+        });
+
+        $callback();
+
+        return $loads;
+    }
+
+    /**
      * @param  list<string>  $abilities  For example `orders.viewAny`, `orders.view`.
      */
     protected function signIn(array $abilities = []): User

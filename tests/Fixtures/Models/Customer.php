@@ -24,6 +24,12 @@ final class Customer extends Model
 
     protected $guarded = [];
 
+    #[\Override]
+    protected function casts(): array
+    {
+        return ['data' => 'array'];
+    }
+
     /**
      * @return HasMany<Order, $this>
      */
