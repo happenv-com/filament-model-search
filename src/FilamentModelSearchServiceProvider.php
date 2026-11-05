@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Happenv\FilamentModelSearch;
 
+use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 use Illuminate\Support\ServiceProvider;
 
 final class FilamentModelSearchServiceProvider extends ServiceProvider
@@ -12,6 +13,8 @@ final class FilamentModelSearchServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/filament-model-search.php', 'filament-model-search');
+
+        $this->app->singleton(ResourceBindings::class);
     }
 
     public function boot(): void

@@ -6,6 +6,7 @@ namespace Happenv\FilamentModelSearch;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Happenv\FilamentModelSearch\Binding\ResourceBindings;
 
 /**
  * Registers the model search on a panel.
@@ -60,7 +61,15 @@ final class FilamentModelSearchPlugin implements Plugin
         return $this->palette;
     }
 
-    public function register(Panel $panel): void {}
+    public function register(Panel $panel): void
+    {
+        // Idempotent: a panel may be registered again, and the bindings hold class names only.
+        $bindings = resolve(ResourceBindings::class);
+
+        foreach ($this->resources as $resource) {
+            $bindings->registerResource($resource);
+        }
+    }
 
     public function boot(Panel $panel): void {}
 }
