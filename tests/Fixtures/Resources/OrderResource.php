@@ -14,6 +14,8 @@ use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\Edi
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ListOrders;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ViewOrder;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 final class OrderResource extends Resource
 {
@@ -27,6 +29,27 @@ final class OrderResource extends Resource
     public static function modelSearch(): string
     {
         return OrderSearch::class;
+    }
+
+    /**
+     * Tests make the details read a relation through `fixtures.order_details_customer`.
+     *
+     * @return array<string, string>
+     */
+    #[\Override]
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return config('fixtures.order_details_customer') === true
+            ? ['Customer' => (string) $record->customer?->name]
+            : [];
+    }
+
+    #[\Override]
+    public static function getGlobalSearchEloquentQuery(): Builder
+    {
+        $query = parent::getGlobalSearchEloquentQuery();
+
+        return config('fixtures.order_details_customer') === true ? $query->with('customer') : $query;
     }
 
     public static function table(Table $table): Table

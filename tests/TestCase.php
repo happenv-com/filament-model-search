@@ -14,6 +14,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\FormsServiceProvider;
 use Filament\Infolists\InfolistsServiceProvider;
 use Filament\Notifications\NotificationsServiceProvider;
+use Filament\Resources\Resource;
 use Filament\Schemas\SchemasServiceProvider;
 use Filament\Support\SupportServiceProvider;
 use Filament\Tables\Filters\SelectFilter;
@@ -85,6 +86,17 @@ abstract class TestCase extends Orchestra
     protected function createCustomer(string $name, ?string $email = null, ?string $phone = null, array $extra = []): Customer
     {
         return Customer::query()->create(['name' => $name, 'email' => $email, 'phone' => $phone, ...$extra]);
+    }
+
+    /**
+     * The titles of what a resource's global search answers, in order.
+     *
+     * @param  class-string<\Filament\Resources\Resource>  $resource
+     * @return list<string>
+     */
+    protected function globalTitles(string $resource, #[\SensitiveParameter] string $phrase): array
+    {
+        return $resource::getGlobalSearchResults($phrase)->map(static fn ($result): string => (string) $result->title)->values()->all();
     }
 
     /**
