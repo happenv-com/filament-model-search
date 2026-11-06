@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Happenv\FilamentModelSearch;
 
 use Filament\Contracts\Plugin;
+use Filament\Facades\Filament;
 use Filament\Panel;
 use Filament\View\PanelsRenderHook;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
@@ -18,12 +19,16 @@ use Happenv\FilamentModelSearch\Livewire\RecordPalette;
  */
 final class FilamentModelSearchPlugin implements Plugin
 {
+    public const string ID = 'filament-model-search';
+
     public const string PALETTE_COMPONENT = 'filament-model-search.record-palette';
 
     /** @var list<class-string> */
     private array $resources = [];
 
     private bool $palette = true;
+
+    private ?bool $paletteTrigger = null;
 
     /** @var list<string> */
     private array $hookedPanels = [];
@@ -35,7 +40,7 @@ final class FilamentModelSearchPlugin implements Plugin
 
     public function getId(): string
     {
-        return 'filament-model-search';
+        return self::ID;
     }
 
     /**
@@ -68,6 +73,40 @@ final class FilamentModelSearchPlugin implements Plugin
         return $this->palette;
     }
 
+    /**
+     * Whether the built-in trigger button is drawn next to the global search. The modal and the keyboard shortcut stay
+     * either way, so a host can open the palette from its own trigger. Overrides `palette.trigger` of the config.
+     */
+    public function paletteTrigger(bool $shown = true): self
+    {
+        $this->paletteTrigger = $shown;
+
+        return $this;
+    }
+
+    public function isPaletteTriggerShown(): bool
+    {
+        return $this->paletteTrigger ?? config('filament-model-search.palette.trigger') !== false;
+    }
+
+    /**
+     * Whether the palette is offered to the signed-in user on the current panel: switched on, a user signed in and at
+     * least one searched resource the user may open (`canAccess() && canViewAny()`). The built-in trigger and the modal
+     * ask this same rule on every render, so a host's own trigger can ask it too.
+     */
+    public static function isPaletteOffered(): bool
+    {
+        $panel = Filament::getCurrentPanel();
+
+        if (! $panel instanceof Panel || ! $panel->hasPlugin(self::ID)) {
+            return false;
+        }
+
+        $plugin = $panel->getPlugin(self::ID);
+
+        return $plugin instanceof self && $plugin->paletteIsOffered();
+    }
+
     public function register(Panel $panel): void
     {
         // Idempotent: a panel may be registered again, and the bindings hold class names only.
@@ -85,7 +124,7 @@ final class FilamentModelSearchPlugin implements Plugin
         $this->hookedPanels[] = $panel->getId();
 
         // Always hooked, decided when the page renders: the user, the config and the bindings may all differ from the boot.
-        $panel->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): string => $this->paletteIsOffered()
+        $panel->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): string => $this->isPaletteTriggerShown() && $this->paletteIsOffered()
             ? view('filament-model-search::components.palette-trigger', ['modalId' => RecordPalette::MODAL_ID])->render()
             : '');
         $panel->renderHook(PanelsRenderHook::BODY_END, fn (): string => $this->paletteIsOffered()
@@ -96,11 +135,11 @@ final class FilamentModelSearchPlugin implements Plugin
     public function boot(Panel $panel): void {}
 
     /**
-     * Whether this page offers the palette: switched on, and at least one resource the user may open to search.
+     * Whether this page offers the palette: switched on, a user signed in, and at least one resource the user may open to search.
      */
     private function paletteIsOffered(): bool
     {
-        if (! $this->palette || config('filament-model-search.palette.enabled') !== true) {
+        if (! $this->palette || config('filament-model-search.palette.enabled') !== true || ! Filament::auth()->check()) {
             return false;
         }
 

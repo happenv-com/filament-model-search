@@ -220,6 +220,35 @@ A modal that searches every bound resource at once (one `SearchQuery::palette()`
 - The component is isolated (`#[Isolate]`), so its requests are not bundled with other components' updates; there is no polling.
 - The phrase is never logged, and the palette adds nothing of it to a query other than through the core.
 
+### Your own trigger
+
+To open the palette from your own element (a wide search field in the topbar, say), hide the built-in button and keep the modal and the shortcut:
+
+```php
+FilamentModelSearchPlugin::make()->paletteTrigger(false) // or 'palette.trigger' => false in the config
+```
+
+The plugin option wins over the config. Then ask the package whether the palette is offered, instead of copying its rule:
+
+```php
+FilamentModelSearchPlugin::isPaletteOffered(): bool
+```
+
+It answers for the signed-in user on the current panel: the palette is switched on (config and plugin), a user is signed in, and at least one searched resource passes `canAccess() && canViewAny()`. The built-in trigger and the modal ask the same rule on every render. It does not depend on `paletteTrigger()`.
+
+```blade
+@if (\Happenv\FilamentModelSearch\FilamentModelSearchPlugin::isPaletteOffered())
+    <button
+        type="button"
+        x-on:click="$dispatch('open-modal', { id: @js(\Happenv\FilamentModelSearch\Livewire\RecordPalette::MODAL_ID) })"
+    >
+        {{ __('Search') }}
+    </button>
+@endif
+```
+
+The modal id is `RecordPalette::MODAL_ID`. If you show a hint for the shortcut, read it from `config('filament-model-search.palette.keybindings')` (the first entry, in the form `mod+shift+k`; `mod` is Command on macOS and Control elsewhere).
+
 ## Configuration
 
 Publish the file if you want to change anything:
@@ -233,6 +262,7 @@ php artisan vendor:publish --tag=filament-model-search-config
 return [
     'palette' => [
         'enabled' => true,
+        'trigger' => true,
         'keybindings' => ['mod+shift+k'],
         'debounce_ms' => 250,
         'per_group' => 5,
@@ -243,7 +273,7 @@ return [
 ];
 ```
 
-`keybindings` is a list of shortcuts in the form `mod+shift+k` (`mod` is Command on macOS and Control elsewhere); several may be given. Characters other than letters, digits and `+`/`-` are stripped. An empty list leaves the button as the only way in.
+`trigger` draws the built-in button next to the global search (see [Your own trigger](#your-own-trigger)). `keybindings` is a list of shortcuts in the form `mod+shift+k` (`mod` is Command on macOS and Control elsewhere); several may be given. Characters other than letters, digits and `+`/`-` are stripped. An empty list leaves the button as the only way in.
 
 The rest of the behaviour (timeouts, rate limit, privacy, word handling) is the core's configuration, `config/model-search.php`.
 
