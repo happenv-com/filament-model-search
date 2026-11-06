@@ -2,6 +2,14 @@
 
 All notable changes to `filament-model-search` will be documented in this file.
 
+## v0.1.4 - 2026-11-06
+
+### What's Changed
+
+* feat: custom palette triggers (paletteTrigger option, isPaletteOffered) by @webard in https://github.com/happenv-com/filament-model-search/pull/5
+
+**Full Changelog**: https://github.com/happenv-com/filament-model-search/compare/v0.1.3...v0.1.4
+
 ## v0.1.3 - 2026-11-05
 
 ### What's Changed
