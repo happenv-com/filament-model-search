@@ -36,3 +36,17 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+
+  - package-ecosystem: npm
+    directory: /
+    # Playwright only drives the browser tests; same cooldown as the other ecosystems.
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
