@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit bootstrap="vendor/autoload.php" colors="true" cacheDirectory=".phpunit.cache">
+<phpunit bootstrap="vendor/autoload.php" defaultTestSuite="Package" colors="true" cacheDirectory=".phpunit.cache">
     <testsuites>
         <testsuite name="Package">
-            <directory>tests</directory>
+            <directory>tests/Unit</directory>
+            <directory>tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Browser">
+            <directory>tests/Browser</directory>
         </testsuite>
     </testsuites>
-    <groups>
-        <exclude>
-            <group>browser</group>
-        </exclude>
-    </groups>
     <php>
         <env name="DB_HOST" value="127.0.0.1"/>
         <env name="DB_PORT" value="5432"/>

@@ -59,10 +59,12 @@
         },
         closed(event) {
             if (!this.isThisModal(event)) return
-            // Filament would give the focus back to the proxy, which was the focused element when it opened: the page's own element gets it instead.
-            this.$refs.proxy.blur()
-            if (this.returnTo?.isConnected) this.returnTo.focus({ preventScroll: true })
+            // Filament's focus trap is still active while this runs: hand the focus back on the next tick.
+            const target = this.returnTo
             this.returnTo = null
+            this.$nextTick(() => {
+                if (target?.isConnected) target.focus({ preventScroll: true })
+            })
         },
         submitOnEnter(event) {
             if (event.isComposing || event.ctrlKey || event.metaKey) return
@@ -123,7 +125,7 @@
                     x-on:input="activeId = null"
                     x-on:keydown.arrow-down="move($event, 1)"
                     x-on:keydown.arrow-up="move($event, -1)"
-                    x-on:keydown.escape="$event.preventDefault()"
+                    x-on:keydown.escape="if (!$event.isComposing) $event.preventDefault()"
                     maxlength="1000"
                     autocomplete="off"
                     placeholder="{{ __('filament-model-search::record-palette.placeholder') }}"

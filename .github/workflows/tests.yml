@@ -72,25 +72,35 @@ jobs:
           DB_PASSWORD: postgres
         run: vendor/bin/pest --ci
 
+      # The browser tests run on one matrix leg only: they depend on the browser, not on the PHP version.
+      - name: Setup Node
+        if: matrix.php == '8.5'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
       - name: Install the browsers for the palette tests
+        if: matrix.php == '8.5'
         run: |
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium webkit
 
       - name: Execute browser tests (Chromium)
+        if: matrix.php == '8.5'
         env:
           DB_HOST: 127.0.0.1
           DB_PORT: 5432
           DB_DATABASE: postgres
           DB_USERNAME: postgres
           DB_PASSWORD: postgres
-        run: vendor/bin/pest --ci --group=browser
+        run: vendor/bin/pest --ci --testsuite=Browser
 
       - name: Execute browser tests (WebKit)
+        if: matrix.php == '8.5'
         env:
           DB_HOST: 127.0.0.1
           DB_PORT: 5432
           DB_DATABASE: postgres
           DB_USERNAME: postgres
           DB_PASSWORD: postgres
-        run: vendor/bin/pest --ci --group=browser --browser safari
+        run: vendor/bin/pest --ci --testsuite=Browser --browser safari

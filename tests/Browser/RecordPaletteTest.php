@@ -145,3 +145,30 @@ it('still searches for similar names with the shortcut after the palette updated
         ->keys(PALETTE_INPUT, 'ControlOrMeta+Enter')
         ->assertScript(PALETTE_OPTIONS.'.length', 1);
 });
+
+it('gives the focus back to the element that had it when the palette closes', function () use ($trigger): void {
+    $button = $trigger();
+    $page = visit('/admin/orders')->assertScript('!!document.querySelector("[data-fi-modal-id]")._x_dataStack', true);
+    $page->script('window.__opener = document.querySelector('.json_encode($button).'); window.__opener.focus()');
+    $focusedField = 'document.activeElement === document.querySelector("'.PALETTE_INPUT.'")';
+
+    // Opened with the shortcut and closed with Escape.
+    $page->keys($button, 'ControlOrMeta+Shift+K')->assertScript($focusedField, true)
+        ->keys(PALETTE_INPUT, 'Escape')->assertScript('document.activeElement === window.__opener', true);
+
+    // Opened by a host's own event and closed with the event a click on the backdrop sends.
+    $page->script('window.dispatchEvent(new CustomEvent("open-modal", { detail: { id: "'.RecordPalette::MODAL_ID.'" } }))');
+    $page->assertScript($focusedField, true);
+    $page->script('window.dispatchEvent(new CustomEvent("close-modal", { detail: { id: "'.RecordPalette::MODAL_ID.'" } }))');
+    $page->assertScript('document.activeElement === window.__opener', true);
+});
+
+it('does not leave the focus on the hidden proxy or inside the closed modal after a tap on the trigger', function () use ($trigger): void {
+    $page = visit('/admin/orders')->on()->mobile()->assertScript('!!document.querySelector("[data-fi-modal-id]")._x_dataStack', true);
+    $page->click($trigger())->assertScript('document.activeElement === document.querySelector("'.PALETTE_INPUT.'")', true);
+
+    $page->script('window.dispatchEvent(new CustomEvent("close-modal", { detail: { id: "'.RecordPalette::MODAL_ID.'" } }))');
+
+    // WebKit never focuses a button on click, so the page element that "had" the focus may be the body there.
+    $page->assertScript('!document.activeElement.closest("[data-fi-modal-id]") && document.activeElement.getAttribute("aria-hidden") !== "true"', true);
+});
