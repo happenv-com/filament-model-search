@@ -7,3 +7,5 @@
 # Composer credentials — never commit.
 auth.json
 /build
+/node_modules
+/tests/Browser/Screenshots
