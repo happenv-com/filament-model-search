@@ -6,6 +6,8 @@ use Happenv\FilamentModelSearch\Livewire\RecordPalette;
 
 covers(RecordPalette::class);
 
+// Alpine has initialised the modal: only then do the shortcut and the trigger work.
+const PALETTE_READY = '!!window.Alpine && window.Alpine.$data(document.querySelector("[data-fi-modal-id]")).isOpen !== undefined';
 const PALETTE_INPUT = 'input[role=combobox]';
 const PALETTE_OPTIONS = 'document.querySelectorAll("[role=option]")';
 // The offset inside the container, which the opening animation does not move.
@@ -30,14 +32,13 @@ beforeEach(function (): void {
 
 $focused = 'document.activeElement === document.querySelector("'.PALETTE_INPUT.'")';
 $trigger = static fn (): string => 'button[aria-label="'.trans('filament-model-search::record-palette.trigger').'"]';
-$ready = '!!document.querySelector("[data-fi-modal-id]")._x_dataStack';
 $active = static fn (string $js): string => 'document.querySelector("'.PALETTE_INPUT.'").getAttribute("aria-activedescendant") === '.$js;
 
 it('focuses the phrase when the shortcut opens the palette, near the top of the page', function () use ($focused): void {
     $this->createOrder('OR-1001', '555123');
     $this->indexAll();
 
-    $page = visit('/admin/orders')->keys('body[class]', 'ControlOrMeta+Shift+K')
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->keys('html > body', 'ControlOrMeta+Shift+K')
         ->assertScript($focused, true)
         ->assertScript(PALETTE_WINDOW_TOP.' <= 128', true);
     $before = $page->script(PALETTE_WINDOW_TOP);
@@ -59,13 +60,13 @@ it('focuses the phrase when the trigger opens the palette, and selects the previ
 });
 
 it('keeps the phrase when Escape closes the palette', function () use ($focused): void {
-    $page = visit('/admin/orders')->keys('body[class]', 'ControlOrMeta+Shift+K')->assertScript($focused, true);
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->keys('html > body', 'ControlOrMeta+Shift+K')->assertScript($focused, true);
 
     $page->type(PALETTE_INPUT, '555123')->keys(PALETTE_INPUT, 'Escape')
         ->assertScript('getComputedStyle(document.querySelector("[data-fi-modal-id=\"'.RecordPalette::MODAL_ID.'\"]")).display', 'none')
         ->assertScript('document.querySelector("'.PALETTE_INPUT.'").value', '555123');
 
-    $page->keys('body[class]', 'ControlOrMeta+Shift+K')
+    $page->keys('html > body', 'ControlOrMeta+Shift+K')
         ->assertScript($focused, true)
         ->assertScript('(() => { const i = document.querySelector("'.PALETTE_INPUT.'"); return i.selectionStart === 0 && i.selectionEnd === 6 })()', true);
 });
@@ -76,7 +77,7 @@ it('moves the highlight across both groups with the arrow keys, wraps, and opens
     $this->createCustomer('Exact Holder', null, '555123');
     $this->indexAll();
 
-    $page = visit('/admin/orders')->keys('body[class]', 'ControlOrMeta+Shift+K');
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->keys('html > body', 'ControlOrMeta+Shift+K');
     $page->type(PALETTE_INPUT, '555123')->assertScript(PALETTE_OPTIONS.'.length', 3);
     $page->assertScript('document.querySelectorAll("[role=listbox] [role=group]").length', 2)
         ->assertScript('document.querySelector("'.PALETTE_INPUT.'").getAttribute("aria-expanded")', 'true');
@@ -102,7 +103,7 @@ it('keeps the layout of the highlighted row and drops a stale highlight', functi
     $this->createOrder('OR-1002', '555124');
     $this->indexAll();
 
-    $page = visit('/admin/orders')->on()->mobile()->assertScript('!!document.querySelector("[data-fi-modal-id]")._x_dataStack', true);
+    $page = visit('/admin/orders')->on()->mobile()->assertScript(PALETTE_READY, true);
     $page->click('button[aria-label="'.trans('filament-model-search::record-palette.trigger').'"]')->type(PALETTE_INPUT, 'OR-100')->assertScript(PALETTE_OPTIONS.'.length', 2);
 
     $page->keys(PALETTE_INPUT, 'ArrowDown')
@@ -124,7 +125,7 @@ it('works on a phone: focused, full width, in place, scrolling inside, no horizo
     $this->indexAll();
 
     // Each call on the pending page would open a new browser page, so the first assertion fixes it (and waits for Alpine).
-    $page = visit('/admin/orders')->on()->mobile()->assertScript('!!document.querySelector("[data-fi-modal-id]")._x_dataStack', true);
+    $page = visit('/admin/orders')->on()->mobile()->assertScript(PALETTE_READY, true);
     $page->click($trigger())->assertScript($focused, true);
     $before = $page->script(PALETTE_WINDOW_TOP);
 
@@ -140,7 +141,7 @@ it('still searches for similar names with the shortcut after the palette updated
     $this->createCustomer('Jonathan Smith', null, '555999');
     $this->indexAll();
 
-    $page = visit('/admin/orders')->keys('body[class]', 'ControlOrMeta+Shift+K');
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->keys('html > body', 'ControlOrMeta+Shift+K');
     $page->type(PALETTE_INPUT, 'Jonathon')->assertScript(PALETTE_OPTIONS.'.length', 0)
         ->keys(PALETTE_INPUT, 'ControlOrMeta+Enter')
         ->assertScript(PALETTE_OPTIONS.'.length', 1);
@@ -148,7 +149,7 @@ it('still searches for similar names with the shortcut after the palette updated
 
 it('gives the focus back to the element that had it when the palette closes', function () use ($trigger): void {
     $button = $trigger();
-    $page = visit('/admin/orders')->assertScript('!!document.querySelector("[data-fi-modal-id]")._x_dataStack', true);
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true);
     $page->script('window.__opener = document.querySelector('.json_encode($button).'); window.__opener.focus()');
     $focusedField = 'document.activeElement === document.querySelector("'.PALETTE_INPUT.'")';
 
@@ -164,7 +165,7 @@ it('gives the focus back to the element that had it when the palette closes', fu
 });
 
 it('does not leave the focus on the hidden proxy or inside the closed modal after a tap on the trigger', function () use ($trigger): void {
-    $page = visit('/admin/orders')->on()->mobile()->assertScript('!!document.querySelector("[data-fi-modal-id]")._x_dataStack', true);
+    $page = visit('/admin/orders')->on()->mobile()->assertScript(PALETTE_READY, true);
     $page->click($trigger())->assertScript('document.activeElement === document.querySelector("'.PALETTE_INPUT.'")', true);
 
     $page->script('window.dispatchEvent(new CustomEvent("close-modal", { detail: { id: "'.RecordPalette::MODAL_ID.'" } }))');
