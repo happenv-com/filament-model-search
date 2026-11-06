@@ -2,6 +2,19 @@
 
 All notable changes to `filament-model-search` will be documented in this file.
 
+## v0.1.6 - 2026-11-06
+
+### What's Changed
+
+* chore(deps): bump the github-actions group with 3 updates by @dependabot[bot] in https://github.com/happenv-com/filament-model-search/pull/7
+* chore: allow laravel-model-search 0.3 by @webard in https://github.com/happenv-com/filament-model-search/pull/8
+
+### New Contributors
+
+* @dependabot[bot] made their first contribution in https://github.com/happenv-com/filament-model-search/pull/7
+
+**Full Changelog**: https://github.com/happenv-com/filament-model-search/compare/v0.1.5...v0.1.6
+
 ## v0.1.5 - 2026-11-06
 
 ### What's Changed
