@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
+use Pest\Browser\Playwright\Playwright;
 
 covers(RecordPalette::class);
 
@@ -17,6 +18,9 @@ beforeEach(function (): void {
     if (! is_file(dirname(__DIR__, 2).'/node_modules/.bin/playwright')) {
         $this->markTestSkipped('Playwright is not installed: run `npm ci && npx playwright install chromium`.');
     }
+
+    // CI browsers can be slow to deliver animation frames (headless WebKit on Linux needs about a second): wait longer than the default 5 s.
+    Playwright::setTimeout(20_000);
 
     config(['filament-model-search.readiness_cache_seconds' => 0]);
 
@@ -38,7 +42,9 @@ it('focuses the phrase when the shortcut opens the palette, near the top of the 
     $this->createOrder('OR-1001', '555123');
     $this->indexAll();
 
+    // One assertion per condition, so a failure names the condition: opened, focused, placed.
     $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->keys('html > body', 'ControlOrMeta+Shift+K')
+        ->assertScript('window.Alpine.$data(document.querySelector("[data-fi-modal-id]")).isOpen', true)
         ->assertScript($focused, true)
         ->assertScript(PALETTE_WINDOW_TOP.' <= 128', true);
     $before = $page->script(PALETTE_WINDOW_TOP);

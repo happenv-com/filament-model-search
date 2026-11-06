@@ -53,9 +53,13 @@
         opened(event) {
             if (!this.isThisModal(event)) return
             this.activeId = null
-            // The window is only visible after the next frame, and Filament's focus trap, which keeps focus that is already inside the modal, starts after two: try now, then once more.
-            this.$nextTick(() => this.focusInput())
-            requestAnimationFrame(() => requestAnimationFrame(() => this.focusInput()))
+            // The field only becomes focusable once the window has been shown, and that waits for animation frames, which some browsers (headless WebKit on Linux) deliver a second late or more. Timers are not throttled that way: try on a timer until it takes, while the modal is still open.
+            let attempts = 0
+            const attempt = () => {
+                this.focusInput()
+                if (document.activeElement !== this.$refs.phrase && attempts++ < 200 && this.$root.querySelector('.fi-modal-open')) setTimeout(attempt, 50)
+            }
+            this.$nextTick(attempt)
         },
         closed(event) {
             if (!this.isThisModal(event)) return
