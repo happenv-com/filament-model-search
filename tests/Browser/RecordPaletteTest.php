@@ -193,6 +193,7 @@ it('is fetched only when called, searches related records with Tab and clears th
     $page->click($trigger())->assertScript($focused, true)->assertScript(PALETTE_OPEN, true);
 
     $page->type(PALETTE_INPUT, 'OR-300')->assertScript('document.querySelectorAll("[data-palette-result]").length', 2)
+        ->assertScript('document.querySelector("'.PALETTE_INPUT.'").getAttribute("aria-activedescendant") === '.PALETTE_OPTIONS.'[0].id', true)
         ->keys(PALETTE_INPUT, 'Tab')
         ->assertScript('document.querySelector("'.PALETTE_INPUT.'").value.startsWith("OR-300") && document.querySelector("'.PALETTE_INPUT.'").value.length === 7', true)
         ->assertScript('document.querySelectorAll("[data-palette-result]").length', 1)
