@@ -47,6 +47,24 @@ final class OrderResource extends Resource
     }
 
     /**
+     * Tests give a result a picture through `fixtures.order_image`.
+     */
+    public static function getGlobalSearchResultImage(Model $record): ?string
+    {
+        $image = config('fixtures.order_image');
+
+        return is_string($image) ? $image : null;
+    }
+
+    /**
+     * Tests switch the related search on through `fixtures.order_related_term`: the customer's name, or none.
+     */
+    public static function getGlobalSearchResultRelatedTerm(Model $record): ?string
+    {
+        return config('fixtures.order_related_term') === true ? $record->signature : null;
+    }
+
+    /**
      * Tests narrow what the resource offers through `fixtures.order_scope`.
      */
     #[\Override]

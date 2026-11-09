@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Happenv\FilamentModelSearch\Support;
 
+use Filament\Support\Icons\Heroicon;
 use Happenv\ModelSearch\Exceptions\SearchIndexNotReady;
 use Happenv\ModelSearch\Exceptions\SearchPrivacyUnavailable;
 use Happenv\ModelSearch\Exceptions\SearchRateLimited;
@@ -47,6 +48,18 @@ enum SearchOutcome: string
             $exception instanceof SearchRateLimited => self::RateLimited,
             $exception instanceof SearchPrivacyUnavailable => self::Unavailable,
             default => null,
+        };
+    }
+
+    /**
+     * The icon of the state a search with no items ended in.
+     */
+    public function icon(): Heroicon
+    {
+        return match ($this) {
+            self::RateLimited, self::TimedOut => Heroicon::OutlinedClock,
+            self::Unavailable => Heroicon::OutlinedExclamationTriangle,
+            default => Heroicon::OutlinedMagnifyingGlass,
         };
     }
 

@@ -9,7 +9,9 @@ use Filament\Facades\Filament;
 use Filament\Panel;
 use Filament\View\PanelsRenderHook;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
+use Happenv\FilamentModelSearch\Http\Controllers\RecordPaletteController;
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
+use Illuminate\Support\Facades\Route;
 
 /**
  * Registers the model search on a panel.
@@ -22,6 +24,8 @@ final class FilamentModelSearchPlugin implements Plugin
     public const string ID = 'filament-model-search';
 
     public const string PALETTE_COMPONENT = 'filament-model-search.record-palette';
+
+    public const string PALETTE_ROUTE = 'filament-model-search.palette';
 
     /** @var list<class-string> */
     private array $resources = [];
@@ -127,12 +131,41 @@ final class FilamentModelSearchPlugin implements Plugin
         $panel->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): string => $this->isPaletteTriggerShown() && $this->paletteIsOffered()
             ? view('filament-model-search::components.palette-trigger', ['modalId' => RecordPalette::MODAL_ID])->render()
             : '');
+        // Only the loader is on the page: the palette itself is fetched when it is first called.
         $panel->renderHook(PanelsRenderHook::BODY_END, fn (): string => $this->paletteIsOffered()
-            ? view('filament-model-search::components.palette', ['component' => self::PALETTE_COMPONENT])->render()
+            ? view('filament-model-search::components.palette', [
+                'url' => $panel->route(self::PALETTE_ROUTE, absolute: false),
+                'modalId' => RecordPalette::MODAL_ID,
+                'keyBindings' => $this->keyBindings(),
+            ])->render()
             : '');
+        $panel->authenticatedRoutes(static function (): void {
+            Route::get('filament-model-search/palette', RecordPaletteController::class)->name(self::PALETTE_ROUTE);
+        });
     }
 
     public function boot(Panel $panel): void {}
+
+    /**
+     * The keys that open the palette, as the keybinding directive writes them (`mod+shift+k` is `mod-shift-k`).
+     *
+     * @return list<string>
+     */
+    private function keyBindings(): array
+    {
+        $configured = config('filament-model-search.palette.keybindings');
+        $bindings = [];
+
+        foreach (is_array($configured) ? $configured : [] as $binding) {
+            $clean = is_string($binding) ? preg_replace('/[^A-Za-z0-9-]/', '', str_replace('+', '-', $binding)) : null;
+
+            if (is_string($clean) && $clean !== '') {
+                $bindings[] = $clean;
+            }
+        }
+
+        return $bindings;
+    }
 
     /**
      * Whether this page offers the palette: switched on, a user signed in, and at least one resource the user may open to search.
