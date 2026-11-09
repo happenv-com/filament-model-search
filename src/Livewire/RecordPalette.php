@@ -16,11 +16,14 @@ use Happenv\FilamentModelSearch\Support\PhraseKind;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Happenv\ModelSearch\Definition\Mode;
 use Happenv\ModelSearch\Definition\ModelSearch;
+use Happenv\ModelSearch\Definition\SearchStage;
 use Happenv\ModelSearch\Query\SearchQuery;
 use Happenv\ModelSearch\Query\SearchResults;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Isolate;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -33,8 +36,10 @@ use Throwable;
  * `open()` accepts only what is in it. Access is asked again on every search and on every `open()`:
  * the bindings are registered once per worker, the user changes.
  *
- * @phpstan-type PaletteItem array{id: string, title: string, url: string, exact: bool, hint: array{label: string, value: string}|null}
+ * @phpstan-type PaletteDetail array{label: string, value: string}
+ * @phpstan-type PaletteItem array{id: string, title: string, url: string, exact: bool, hint: array{label: string, value: string}|null, details: list<PaletteDetail>, image: string|null, relatedTerm: string|null}
  * @phpstan-type PaletteGroup array{type: string, label: string, icon: string|null, items: list<PaletteItem>}
+ * @phpstan-type PaletteWelcomeEntry array{type: string, label: string, icon: string|null, url: string}
  * @phpstan-type PaletteFound array{groups: list<PaletteGroup>, outcome: string|null, stage: bool, timedOut: bool, indexBuilding: bool, total: int, capacity: int}
  */
 #[Isolate]
@@ -94,10 +99,35 @@ final class RecordPalette extends Component
     }
 
     /**
-     * Enter: opens the record when exactly one hit of the whole palette is an exact one.
+     * Searches for what a record of the current results names as its related term: only a term the
+     * record itself offered is accepted, the client cannot search through this for anything else.
+     */
+    public function searchRelated(string $type, string $id): void
+    {
+        $term = $this->relatedTermOf($type, $id);
+
+        if ($term === null) {
+            return;
+        }
+
+        $this->phrase = $term;
+        $this->similar = false;
+        $this->everyStage = false;
+        $this->search();
+    }
+
+    /**
+     * Enter: with nothing found, widens the search when it can be widened; otherwise opens the record
+     * when exactly one hit of the whole palette is an exact one.
      */
     public function submit(): void
     {
+        if ($this->offersWiden()) {
+            $this->searchSimilar();
+
+            return;
+        }
+
         $exact = [];
 
         foreach ($this->found['groups'] as $group) {
@@ -150,16 +180,26 @@ final class RecordPalette extends Component
         $phrase = $this->normalizedPhrase();
         $outcome = is_string($found['outcome']) ? SearchOutcome::tryFrom($found['outcome']) : null;
 
+        $isShort = mb_strlen($phrase) < self::MIN_LENGTH;
+        $offersWiden = $this->offersWiden();
+        $identifierShaped = PhraseKind::isIdentifierShaped($phrase);
+
         return view('filament-model-search::livewire.record-palette', [
             'groups' => $found['groups'],
+            'welcome' => $isShort ? $this->welcome() : [],
             'outcome' => $outcome,
             'offersEveryStage' => $found['stage'] && ! $this->everyStage && ! $this->similar,
             'offersSimilar' => $this->offersSimilar(),
+            'offersWiden' => $offersWiden,
+            'emptyHeading' => $this->emptyHeading($outcome),
+            'emptyDescription' => $this->emptyDescription($outcome, $offersWiden, $identifierShaped),
+            'enterLabel' => $offersWiden ? trans('filament-model-search::record-palette.widen') : null,
             'timedOut' => $found['timedOut'],
             'indexBuilding' => $found['indexBuilding'],
-            'isShort' => mb_strlen($phrase) < self::MIN_LENGTH,
+            'isShort' => $isShort,
+            'similar' => $this->similar,
+            'placeholder' => $this->placeholder(),
             'debounce' => max(0, $this->configInt('palette.debounce_ms', 250)),
-            'keyBindings' => $this->keyBindings(),
         ]);
     }
 
@@ -177,6 +217,77 @@ final class RecordPalette extends Component
             && PhraseKind::hasLetter($phrase)
             && ! PhraseKind::isIdentifierShaped($phrase)
             && $this->found['total'] < $this->found['capacity'];
+    }
+
+    /**
+     * Nothing was found and something can still be asked: the only step left is similar names, because
+     * a type with no hit in its first stage has already been answered from all of them.
+     */
+    private function offersWiden(): bool
+    {
+        return $this->found['outcome'] === SearchOutcome::Empty->value && $this->offersSimilar();
+    }
+
+    private function emptyHeading(?SearchOutcome $outcome): string
+    {
+        return $outcome === SearchOutcome::Empty && $this->similar
+            ? 'filament-model-search::record-palette.similar_empty_heading'
+            : ($outcome?->heading() ?? '');
+    }
+
+    private function emptyDescription(?SearchOutcome $outcome, bool $offersWiden, bool $identifierShaped): string
+    {
+        return match (true) {
+            $outcome !== SearchOutcome::Empty => $outcome?->description() ?? '',
+            $this->similar => 'filament-model-search::record-palette.similar_empty_description',
+            $offersWiden => 'filament-model-search::record-palette.widen_description',
+            $identifierShaped => 'filament-model-search::record-palette.identifier_empty_description',
+            default => $outcome->description(),
+        };
+    }
+
+    /**
+     * The translation key of the field's placeholder: the host names what its records are found by.
+     */
+    private function placeholder(): string
+    {
+        $placeholder = config('filament-model-search.palette.placeholder');
+
+        return is_string($placeholder) && $placeholder !== '' ? $placeholder : 'filament-model-search::record-palette.placeholder';
+    }
+
+    /**
+     * What is searched, shown before anything is typed. Asked now: the user changes.
+     *
+     * @return list<PaletteWelcomeEntry>
+     */
+    private function welcome(): array
+    {
+        $bindings = array_values(array_filter(
+            resolve(ResourceBindings::class)->all(),
+            static fn (ResourceBinding $binding): bool => $binding->isAccessible(),
+        ));
+
+        usort($bindings, static fn (ResourceBinding $a, ResourceBinding $b): int => $a->sort() <=> $b->sort());
+
+        $entries = [];
+
+        foreach ($bindings as $binding) {
+            $url = $binding->listUrl();
+
+            if ($url === null) {
+                continue;
+            }
+
+            $entries[] = [
+                'type' => $this->alias($binding),
+                'label' => Str::ucfirst($binding->label()),
+                'icon' => $this->iconName($binding->icon()),
+                'url' => $url,
+            ];
+        }
+
+        return $entries;
     }
 
     private function search(): void
@@ -273,7 +384,8 @@ final class RecordPalette extends Component
                 continue;
             }
 
-            $stage = $stage || $results->stage !== null;
+            // Only a type that answered from its first stage has anything left to show: `all` has searched everything.
+            $stage = $stage || ($results->stage !== null && $results->stage !== SearchStage::ALL);
             $timedOut = $timedOut || $results->timedOut;
             $indexBuilding = $indexBuilding || $results->indexBuilding;
 
@@ -312,6 +424,15 @@ final class RecordPalette extends Component
     {
         $items = [];
 
+        // What the details read, once for all records (the scope's own eager loads).
+        $records = new EloquentCollection;
+
+        foreach ($results as $result) {
+            $records->push($result->model);
+        }
+
+        $records->loadMissing($binding->scope()->getEagerLoads());
+
         foreach ($results as $result) {
             $url = $binding->url($result->model);
 
@@ -323,12 +444,22 @@ final class RecordPalette extends Component
             $title = $title instanceof Htmlable ? strip_tags($title->toHtml()) : $title;
             $line = MatchLine::forResult($result, $title);
 
+            $details = $binding->details($result->model);
+
+            // A value the second line already shows needs no line of its own.
+            if ($line !== null && in_array($line[1], array_column($details, 'value'), true)) {
+                $line = null;
+            }
+
             $items[] = [
                 'id' => (string) $result->model->getKey(),
                 'title' => $title,
                 'url' => $url,
                 'exact' => $result->match->mode === Mode::Exact,
                 'hint' => $line === null ? null : ['label' => $line[0], 'value' => $line[1]],
+                'details' => $details,
+                'image' => $binding->image($result->model),
+                'relatedTerm' => $binding->relatedTerm($result->model),
             ];
         }
 
@@ -336,7 +467,7 @@ final class RecordPalette extends Component
 
         return [
             'type' => $this->alias($binding),
-            'label' => $binding->label(),
+            'label' => Str::ucfirst($binding->label()),
             'icon' => $this->iconName($icon),
             'items' => $items,
         ];
@@ -352,6 +483,23 @@ final class RecordPalette extends Component
             $icon instanceof BackedEnum => (string) $icon->value,
             default => $icon,
         };
+    }
+
+    private function relatedTermOf(string $type, string $id): ?string
+    {
+        foreach ($this->found['groups'] as $group) {
+            if ($group['type'] !== $type) {
+                continue;
+            }
+
+            foreach ($group['items'] as $item) {
+                if ($item['id'] === $id) {
+                    return $item['relatedTerm'];
+                }
+            }
+        }
+
+        return null;
     }
 
     private function isFound(string $type, string $id): bool
@@ -415,26 +563,5 @@ final class RecordPalette extends Component
         $value = config("filament-model-search.{$key}");
 
         return is_int($value) ? $value : $default;
-    }
-
-    /**
-     * The keys that open the palette, as the keybinding directive writes them (`mod+shift+k` is `mod-shift-k`).
-     *
-     * @return list<string>
-     */
-    private function keyBindings(): array
-    {
-        $configured = config('filament-model-search.palette.keybindings');
-        $bindings = [];
-
-        foreach (is_array($configured) ? $configured : [] as $binding) {
-            $clean = is_string($binding) ? preg_replace('/[^A-Za-z0-9-]/', '', str_replace('+', '-', $binding)) : null;
-
-            if (is_string($clean) && $clean !== '') {
-                $bindings[] = $clean;
-            }
-        }
-
-        return $bindings;
     }
 }

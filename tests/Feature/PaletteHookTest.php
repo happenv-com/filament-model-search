@@ -23,7 +23,19 @@ it('puts the trigger in the topbar and the palette at the end of the body', func
     $this->signIn(['orders.viewAny', 'orders.view']);
 
     expect((string) FilamentView::renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE))->toContain(trans('filament-model-search::record-palette.trigger'))
-        ->and((string) FilamentView::renderHook(PanelsRenderHook::BODY_END))->toContain('filament-model-search.record-palette')->toContain('mod-shift-k');
+        ->and((string) FilamentView::renderHook(PanelsRenderHook::BODY_END))->toContain('data-model-search-palette-loader')->toContain('mod-shift-k');
+});
+
+it('leaves nothing of the palette on the page until it is called', function (): void {
+    $this->signIn(['orders.viewAny', 'orders.view']);
+
+    expect((string) FilamentView::renderHook(PanelsRenderHook::BODY_END))
+        ->toContain('data-model-search-palette-loader')
+        ->not->toContain('wire:snapshot')
+        ->not->toContain('wire:id')
+        ->not->toContain('fi-modal')
+        ->not->toContain('fi-record-palette')
+        ->not->toContain('<style');
 });
 
 it('opens the palette under the one modal id the trigger names', function (): void {
@@ -69,7 +81,7 @@ it('offers nothing to a guest or to a user who may open no searched resource, ev
     expect((string) FilamentView::renderHook(PanelsRenderHook::BODY_END))->toBe('');
 
     $this->signIn(['customers.viewAny', 'customers.update']);
-    expect((string) FilamentView::renderHook(PanelsRenderHook::BODY_END))->toContain('filament-model-search.record-palette');
+    expect((string) FilamentView::renderHook(PanelsRenderHook::BODY_END))->toContain('data-model-search-palette-loader');
 });
 
 it('hooks the palette once per panel however often the plugin registers', function (): void {
@@ -95,7 +107,7 @@ describe('the built-in trigger', function (): void {
         try {
             expect((string) FilamentView::renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE))->toBe('')
                 ->and((string) FilamentView::renderHook(PanelsRenderHook::BODY_END))
-                ->toContain('filament-model-search.record-palette')->toContain('mod-shift-k')->toContain(RecordPalette::MODAL_ID);
+                ->toContain('data-model-search-palette-loader')->toContain('mod-shift-k')->toContain(RecordPalette::MODAL_ID);
         } finally {
             $plugin->paletteTrigger();
         }

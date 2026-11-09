@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Customer;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Support\SetIcon;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 
 covers(RecordPalette::class);
@@ -25,6 +27,8 @@ beforeEach(function (): void {
         'fixtures.customer_label' => null,
         'fixtures.order_details_customer' => null,
         'fixtures.order_icon' => null,
+        'fixtures.order_image' => null,
+        'fixtures.order_related_term' => null,
     ]);
 });
 
@@ -49,7 +53,7 @@ it('groups results per resource with exact hits first and at most per_group each
 
     // Orders come first in the navigation, but only the customer holds an exact hit.
     expect(array_column($groups, 'type'))->toBe(['customer', 'order'])
-        ->and(array_column($groups, 'label'))->toBe([CustomerResource::getPluralModelLabel(), OrderResource::getPluralModelLabel()])
+        ->and(array_column($groups, 'label'))->toBe([Str::ucfirst(CustomerResource::getPluralModelLabel()), Str::ucfirst(OrderResource::getPluralModelLabel())])
         ->and(count($groups[1]['items']))->toBe(5)
         ->and($titles($component->get('found')))->toContain('Exact Holder');
 });
@@ -91,7 +95,7 @@ it('offers similar only for letters, never runs it on its own', function (): voi
     $this->signIn(['customers.viewAny', 'customers.update']);
     $this->createCustomer('Jonathan Doe');
     $this->indexAll();
-    $offer = trans('filament-model-search::record-palette.search_similar');
+    $offer = trans('filament-model-search::record-palette.widen');
 
     $component = Livewire::test(RecordPalette::class)->set('phrase', 'Jonathon');
     $component->assertSee($offer)->assertDontSee('Jonathan Doe');
@@ -243,8 +247,8 @@ it('shows the timed-out state when nothing came back in time', function (): void
 
 it('puts a notice above results that came back while part of the search ran out of time', function (): void {
     // The core flags a partial timeout only in rounds the public API cannot stage, so the view is given the state directly.
-    $group = ['type' => 'order', 'label' => 'Orders', 'icon' => null, 'items' => [['id' => '1', 'title' => 'OR-FAST', 'url' => '/o/1', 'exact' => false, 'hint' => null]]];
-    $state = ['groups' => [$group], 'outcome' => 'results', 'offersEveryStage' => false, 'offersSimilar' => false, 'indexBuilding' => false, 'isShort' => false, 'debounce' => 250, 'keyBindings' => [], 'similar' => false];
+    $group = ['type' => 'order', 'label' => 'Orders', 'icon' => null, 'items' => [['id' => '1', 'title' => 'OR-FAST', 'url' => '/o/1', 'exact' => false, 'hint' => null, 'details' => [], 'image' => null, 'relatedTerm' => null]]];
+    $state = ['groups' => [$group], 'outcome' => 'results', 'offersEveryStage' => false, 'offersSimilar' => false, 'indexBuilding' => false, 'isShort' => false, 'debounce' => 250, 'similar' => false, 'welcome' => [], 'offersWiden' => false, 'emptyHeading' => '', 'emptyDescription' => '', 'enterLabel' => null, 'placeholder' => 'filament-model-search::record-palette.placeholder', 'phrase' => 'OR'];
 
     $withNotice = view('filament-model-search::livewire.record-palette', [...$state, 'timedOut' => true, 'outcome' => SearchOutcome::Results])->render();
     $without = view('filament-model-search::livewire.record-palette', [...$state, 'timedOut' => false, 'outcome' => SearchOutcome::Results])->render();
@@ -429,3 +433,151 @@ it('renders the navigation icon of a hit group, whether it is a string or a scal
     'string' => 'heroicon-o-users',
     'scalable icon enum' => SetIcon::Users,
 ]);
+
+describe('a result row', function (): void {
+    it('carries the details of the global search as its second line, without a query per row', function (): void {
+        config(['fixtures.order_details_customer' => true]);
+        $this->signIn($this->allAbilities());
+        $customer = $this->createCustomer('Second Line');
+        $this->createOrder('OR-77', '770001', ['customer_id' => $customer->id]);
+        $this->createOrder('OR-78', '770002', ['customer_id' => $customer->id]);
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)->set('phrase', 'OR-7');
+
+        expect($component->get('found')['groups'][0]['items'][0]['details'])->toBe([['label' => 'Customer', 'value' => 'Second Line']]);
+        $component->assertSeeHtml('<b>Customer:</b>')->assertSee('Second Line');
+    });
+
+    it('does not repeat in the match line a value the second line already shows', function (): void {
+        config(['fixtures.order_details_customer' => true]);
+        $this->signIn($this->allAbilities());
+        $customer = $this->createCustomer('Unique Holder', 'unique.holder@a.test');
+        $this->createOrder('OR-71', '710001', ['customer_id' => $customer->id, 'customer_name' => 'Unique Holder']);
+        $this->indexAll();
+
+        $groups = Livewire::test(RecordPalette::class)->set('phrase', 'Unique Holder')->get('found')['groups'];
+        $orders = array_values(array_filter($groups, static fn (array $group): bool => $group['type'] === 'order'))[0]['items'];
+
+        expect($orders[0]['details'])->toBe([['label' => 'Customer', 'value' => 'Unique Holder']])
+            ->and($orders[0]['hint'])->toBeNull();
+    });
+
+    it('shows the picture instead of the icon when the resource gives one', function (): void {
+        config(['fixtures.order_image' => 'https://images.test/order.png']);
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-79', '790001');
+        $this->indexAll();
+
+        Livewire::test(RecordPalette::class)->set('phrase', 'OR-79')->assertSeeHtml('src="https://images.test/order.png"');
+    });
+
+    it('has no related search when the resource does not define it or names no term', function (): void {
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-80', '800001');
+        $this->createCustomer('Plain Person', null, '800001');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)->set('phrase', '800001');
+
+        $component->assertDontSeeHtml('wire:click="searchRelated');
+        expect(array_column(array_merge(...array_column($component->get('found')['groups'], 'items')), 'relatedTerm'))->toBe([null, null]);
+    });
+
+    it('searches for the term the record names, starting over', function (): void {
+        config(['fixtures.order_related_term' => true]);
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-81', '810001');
+        $this->createOrder('OR-82', '820001');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)->set('phrase', 'OR-8')->assertSeeHtml('wire:click="searchRelated');
+        $id = (string) Order::query()->where('signature', 'OR-82')->value('id');
+
+        $component->call('searchRelated', 'order', $id)
+            ->assertSet('phrase', 'OR-82')
+            ->assertSet('similar', false)
+            ->assertSet('everyStage', false)
+            ->assertSee('OR-82')
+            ->assertDontSee('OR-81');
+    });
+
+    it('searches only for a term a found record offered', function (): void {
+        config(['fixtures.order_related_term' => true]);
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-83', '830001');
+        $this->indexAll();
+
+        Livewire::test(RecordPalette::class)->set('phrase', 'OR-83')->call('searchRelated', 'order', '999999')->assertSet('phrase', 'OR-83');
+    });
+});
+
+describe('before anything is typed', function (): void {
+    it('lists what can be searched, only what the user may open', function (): void {
+        $this->signIn(['customers.viewAny', 'customers.update']);
+
+        $component = Livewire::test(RecordPalette::class);
+
+        $component->assertSee(trans('filament-model-search::record-palette.welcome_heading'))
+            ->assertSee(Str::ucfirst(CustomerResource::getPluralModelLabel()))
+            ->assertDontSee(Str::ucfirst(OrderResource::getPluralModelLabel()))
+            ->assertSeeHtml('href="'.e(CustomerResource::getUrl('index')).'"');
+    });
+
+    it('hides the list once results are shown', function (): void {
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-90', '900001');
+        $this->indexAll();
+
+        Livewire::test(RecordPalette::class)->set('phrase', 'OR-90')->assertDontSee(trans('filament-model-search::record-palette.welcome_heading'));
+    });
+});
+
+describe('when nothing is found', function (): void {
+    $widen = static fn (): string => trans('filament-model-search::record-palette.widen');
+
+    it('offers to widen the search for a name, and Enter does it', function () use ($widen): void {
+        $this->signIn(['customers.viewAny', 'customers.update']);
+        $this->createCustomer('Jonathan Doe');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)->set('phrase', 'Jonathon')->assertSee($widen())->assertDontSee('Jonathan Doe');
+
+        $component->call('submit')->assertSet('similar', true)->assertSee('Jonathan Doe')->assertDontSee($widen());
+    });
+
+    it('does not offer it for an identifier, where typos are not tolerated', function () use ($widen): void {
+        $this->signIn($this->allAbilities());
+        $this->indexAll();
+
+        Livewire::test(RecordPalette::class)->set('phrase', '98765')
+            ->assertDontSee($widen())
+            ->assertSee(trans('filament-model-search::record-palette.identifier_empty_description'));
+    });
+
+    it('says so when even similar names found nothing, and offers nothing more', function () use ($widen): void {
+        $this->signIn(['customers.viewAny', 'customers.update']);
+        $this->indexAll();
+
+        Livewire::test(RecordPalette::class)->set('phrase', 'Qwertyuiop')->call('searchSimilar')
+            ->assertSee(trans('filament-model-search::record-palette.similar_empty_heading'))
+            ->assertDontSee($widen());
+    });
+
+    it('does not offer every stage: a type with no hit in its first stage has searched them all', function (): void {
+        $this->signIn($this->allAbilities());
+        $this->indexAll();
+
+        Livewire::test(RecordPalette::class)->set('phrase', 'Nobody Here')->assertDontSee(trans('filament-model-search::record-palette.search_every_stage'));
+    });
+});
+
+it('does not offer every stage when the results already came from all of them', function (): void {
+    $this->signIn($this->allAbilities());
+    $this->createOrder('OR-SHIPPED-ONLY', '424299-A', ['state' => 'shipped']);
+    $this->indexAll();
+
+    Livewire::test(RecordPalette::class)->set('phrase', '424299')
+        ->assertSee('OR-SHIPPED-ONLY')
+        ->assertDontSee(trans('filament-model-search::record-palette.search_every_stage'));
+});

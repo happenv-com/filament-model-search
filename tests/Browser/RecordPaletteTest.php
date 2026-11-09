@@ -7,8 +7,9 @@ use Pest\Browser\Playwright\Playwright;
 
 covers(RecordPalette::class);
 
-// Alpine has initialised the modal: only then do the shortcut and the trigger work.
-const PALETTE_READY = '!!window.Alpine && window.Alpine.$data(document.querySelector("[data-fi-modal-id]")).isOpen !== undefined';
+// Alpine has initialised the loader: only then do the shortcut and the trigger work. The palette itself is not on the page yet.
+const PALETTE_READY = '!!window.Alpine && window.Alpine.$data(document.querySelector("[data-model-search-palette-loader]"))?.state === "idle"';
+const PALETTE_OPEN = '(() => { const m = document.querySelector("[data-fi-modal-id=\\"'.RecordPalette::MODAL_ID.'\\"]"); return !!m && window.Alpine.$data(m).isOpen })()';
 const PALETTE_INPUT = 'input[role=combobox]';
 const PALETTE_OPTIONS = 'document.querySelectorAll("[role=option]")';
 // The offset inside the container, which the opening animation does not move.
@@ -44,12 +45,12 @@ it('focuses the phrase when the shortcut opens the palette, near the top of the 
 
     // One assertion per condition, so a failure names the condition: opened, focused, placed.
     $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->keys('html > body', 'ControlOrMeta+Shift+K')
-        ->assertScript('window.Alpine.$data(document.querySelector("[data-fi-modal-id]")).isOpen', true)
+        ->assertScript(PALETTE_OPEN, true)
         ->assertScript($focused, true)
         ->assertScript(PALETTE_WINDOW_TOP.' <= 128', true);
     $before = $page->script(PALETTE_WINDOW_TOP);
 
-    $page->type(PALETTE_INPUT, 'OR-100')->assertScript(PALETTE_OPTIONS.'.length', 1);
+    $page->type(PALETTE_INPUT, 'OR-100')->assertScript('document.querySelectorAll("[data-palette-result]").length', 1);
 
     expect($page->script(PALETTE_WINDOW_TOP))->toBe($before);
 });
@@ -90,7 +91,8 @@ it('moves the highlight across both groups with the arrow keys, wraps, and opens
 
     $options = static fn (string $nth): string => PALETTE_OPTIONS.'['.$nth.']';
 
-    $page->keys(PALETTE_INPUT, 'ArrowDown')->assertScript($active($options('0').'.id'), true)
+    // The first result is highlighted as soon as the results are in.
+    $page->assertScript($active($options('0').'.id'), true)
         ->keys(PALETTE_INPUT, 'ArrowDown')->assertScript($active($options('1').'.id'), true)
         ->keys(PALETTE_INPUT, 'ArrowDown')->assertScript($active($options('2').'.id'), true)
         ->assertScript($options('2').'.closest("[role=group]") !== '.$options('0').'.closest("[role=group]")', true)
@@ -112,13 +114,12 @@ it('keeps the layout of the highlighted row and drops a stale highlight', functi
     $page = visit('/admin/orders')->on()->mobile()->assertScript(PALETTE_READY, true);
     $page->click('button[aria-label="'.trans('filament-model-search::record-palette.trigger').'"]')->type(PALETTE_INPUT, 'OR-100')->assertScript(PALETTE_OPTIONS.'.length', 2);
 
-    $page->keys(PALETTE_INPUT, 'ArrowDown')
-        ->assertScript('(() => { const o = '.PALETTE_OPTIONS.'[0]; const s = getComputedStyle(o); return o.classList.contains("fi-selected") && s.display === "flex" && s.paddingLeft === "8px" && s.flexWrap === "wrap" })()', true)
+    $page->assertScript('(() => { const o = '.PALETTE_OPTIONS.'[0]; const s = getComputedStyle(o); return o.classList.contains("fi-selected") && s.display === "flex" && s.paddingLeft === "8px" })()', true)
         ->assertScript('(() => { const o = '.PALETTE_OPTIONS.'[0]; const w = document.querySelector(".fi-modal-window").getBoundingClientRect(); return o.scrollWidth <= o.clientWidth && o.getBoundingClientRect().right <= w.right })()', true);
 
-    // A new phrase replaces the rows: no highlight may point at a row that is gone.
+    // A new phrase replaces the rows: the highlight moves to the new first row, never to a row that is gone.
     $page->type(PALETTE_INPUT, 'OR-1002')->assertScript(PALETTE_OPTIONS.'.length', 1)
-        ->assertScript('document.querySelector("'.PALETTE_INPUT.'").getAttribute("aria-activedescendant")', null)
+        ->assertScript('document.querySelector("'.PALETTE_INPUT.'").getAttribute("aria-activedescendant") === '.PALETTE_OPTIONS.'[0].id', true)
         ->type(PALETTE_INPUT, 'zzzzzz')->assertScript(PALETTE_OPTIONS.'.length', 0)
         ->assertScript('document.querySelector("'.PALETTE_INPUT.'").getAttribute("aria-expanded")', 'false');
 });
@@ -135,7 +136,7 @@ it('works on a phone: focused, full width, in place, scrolling inside, no horizo
     $page->click($trigger())->assertScript($focused, true);
     $before = $page->script(PALETTE_WINDOW_TOP);
 
-    $page->type(PALETTE_INPUT, 'OR-20')->assertScript(PALETTE_OPTIONS.'.length', 30)
+    $page->type(PALETTE_INPUT, 'OR-20')->assertScript('document.querySelectorAll("[data-palette-result]").length', 30)
         ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
         ->assertScript('(() => { const w = document.querySelector(".fi-modal-window").getBoundingClientRect(); return w.left >= 8 && w.left <= 24 && Math.abs(window.innerWidth - w.right - w.left) < 2 })()', true)
         ->assertScript('(() => { const l = document.querySelector("[role=listbox]"); return getComputedStyle(l).overflowY === "auto" && l.scrollHeight > l.clientHeight && l.getBoundingClientRect().bottom <= window.innerHeight })()', true);
@@ -178,4 +179,27 @@ it('does not leave the focus on the hidden proxy or inside the closed modal afte
 
     // WebKit never focuses a button on click, so the page element that "had" the focus may be the body there.
     $page->assertScript('!document.activeElement.closest("[data-fi-modal-id]") && document.activeElement.getAttribute("aria-hidden") !== "true"', true);
+});
+
+it('is fetched only when called, searches related records with Tab and clears the phrase with the reset button', function () use ($focused, $trigger): void {
+    config(['fixtures.order_related_term' => true]);
+    $this->createOrder('OR-3001', '555301');
+    $this->createOrder('OR-3002', '555302');
+    $this->indexAll();
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)
+        ->assertScript('document.querySelector("[data-fi-modal-id=\\"'.RecordPalette::MODAL_ID.'\\"]") === null && document.querySelector(".fi-record-palette") === null', true);
+
+    $page->click($trigger())->assertScript($focused, true)->assertScript(PALETTE_OPEN, true);
+
+    $page->type(PALETTE_INPUT, 'OR-300')->assertScript('document.querySelectorAll("[data-palette-result]").length', 2)
+        ->keys(PALETTE_INPUT, 'Tab')
+        ->assertScript('document.querySelector("'.PALETTE_INPUT.'").value.startsWith("OR-300") && document.querySelector("'.PALETTE_INPUT.'").value.length === 7', true)
+        ->assertScript('document.querySelectorAll("[data-palette-result]").length', 1)
+        ->assertScript($focused, true);
+
+    $page->click('.fi-record-palette-search-tail button')
+        ->assertScript('document.querySelector("'.PALETTE_INPUT.'").value', '')
+        ->assertScript('document.querySelectorAll("[data-palette-result]").length', 0)
+        ->assertScript($focused, true);
 });

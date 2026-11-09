@@ -10,6 +10,8 @@ return [
         'keybindings' => ['mod+shift+k'],
         'debounce_ms' => 250,
         'per_group' => 5,
+        // The translation key of the field's placeholder; null keeps the package's own.
+        'placeholder' => null,
     ],
 
     // How long the readiness of an index is remembered, in seconds.

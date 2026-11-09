@@ -117,6 +117,66 @@ final readonly class ResourceBinding
         return null;
     }
 
+    /**
+     * The page listing the resource's records, or none when the resource has no such page.
+     */
+    public function listUrl(): ?string
+    {
+        $resource = $this->resourceClass;
+
+        return $this->isOnCurrentPanel() && $resource::hasPage('index') ? $resource::getUrl('index') : null;
+    }
+
+    /**
+     * The second line of a result: what the resource's global search shows under the title.
+     *
+     * @return list<array{label: string, value: string}>
+     */
+    public function details(Model $record): array
+    {
+        $resource = $this->resourceClass;
+        $details = [];
+
+        foreach ($resource::getGlobalSearchResultDetails($record) as $label => $value) {
+            if (filled($value)) {
+                $details[] = ['label' => $label, 'value' => $value];
+            }
+        }
+
+        return $details;
+    }
+
+    /**
+     * The picture of a result, shown instead of the resource's icon: the optional
+     * `getGlobalSearchResultImage(Model $record): ?string` of the resource.
+     */
+    public function image(Model $record): ?string
+    {
+        return $this->optionalString('getGlobalSearchResultImage', $record);
+    }
+
+    /**
+     * What to search for to see the records tied to this one: the optional
+     * `getGlobalSearchResultRelatedTerm(Model $record): ?string` of the resource. Without one the result has no related search.
+     */
+    public function relatedTerm(Model $record): ?string
+    {
+        return $this->optionalString('getGlobalSearchResultRelatedTerm', $record);
+    }
+
+    private function optionalString(string $method, Model $record): ?string
+    {
+        $resource = $this->resourceClass;
+
+        if (! method_exists($resource, $method)) {
+            return null;
+        }
+
+        $value = $resource::$method($record);
+
+        return is_string($value) && filled($value) ? $value : null;
+    }
+
     private function isOnCurrentPanel(): bool
     {
         return in_array($this->resourceClass, Filament::getCurrentOrDefaultPanel()?->getResources() ?? [], true);
