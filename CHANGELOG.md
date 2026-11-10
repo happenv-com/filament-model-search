@@ -2,6 +2,14 @@
 
 All notable changes to `filament-model-search` will be documented in this file.
 
+## v0.2.1 - 2026-11-10
+
+### What's Changed
+
+* chore: allow laravel-model-search 0.4 by @webard in https://github.com/happenv-com/filament-model-search/pull/10
+
+**Full Changelog**: https://github.com/happenv-com/filament-model-search/compare/v0.2.0...v0.2.1
+
 ## v0.1.6 - 2026-11-06
 
 ### What's Changed
