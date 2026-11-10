@@ -225,6 +225,9 @@ abstract class TestCase extends Orchestra
         ]);
         $app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
         $app['config']->set('auth.providers.users.model', User::class);
+
+        // The fixtures mix key types (uuid orders, bigint customers and products), which only a text subject id holds.
+        $app['config']->set('model-search.subject_key_type', 'text');
     }
 
     protected function defineDatabaseMigrations(): void
