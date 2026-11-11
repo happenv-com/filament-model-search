@@ -10,6 +10,10 @@ use Filament\Support\Contracts\ScalableIcon;
 use Filament\Support\Enums\IconSize;
 use Happenv\FilamentModelSearch\Binding\ResourceBinding;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
+use Happenv\FilamentModelSearch\History\PaletteHistory;
+use Happenv\FilamentModelSearch\Palette\PaletteRowRenderer;
+use Happenv\FilamentModelSearch\Palette\RenderedPaletteRow;
+use Happenv\FilamentModelSearch\Palette\SearchResultRow;
 use Happenv\FilamentModelSearch\Support\HostScope;
 use Happenv\FilamentModelSearch\Support\MatchLine;
 use Happenv\FilamentModelSearch\Support\PhraseKind;
@@ -38,8 +42,9 @@ use Throwable;
  *
  * @phpstan-type PaletteDetail array{label: string, value: string}
  * @phpstan-type PaletteItem array{id: string, title: string, url: string, exact: bool, hint: array{label: string, value: string}|null, details: list<PaletteDetail>, image: string|null, relatedTerm: string|null}
- * @phpstan-type PaletteGroup array{type: string, label: string, icon: string|null, items: list<PaletteItem>}
- * @phpstan-type PaletteWelcomeEntry array{type: string, label: string, icon: string|null, current: bool}
+ * @phpstan-type PaletteGroup array{type: string, label: string, pluralLabel: string, icon: string|null, items: list<PaletteItem>, more: bool}
+ * @phpstan-type RecentItem array{type: string, id: string, title: string, url: string, details: list<PaletteDetail>, image: string|null, icon: string|null}
+ * @phpstan-type PaletteChip array{type: string, label: string, icon: string|null, current: bool}
  * @phpstan-type PaletteFound array{groups: list<PaletteGroup>, outcome: string|null, stage: bool, timedOut: bool, indexBuilding: bool, total: int, capacity: int}
  */
 #[Isolate]
@@ -57,7 +62,7 @@ final class RecordPalette extends Component
     /**
      * The morph alias of the one resource the search is narrowed to, or null for every resource. Set only
      * through `scopeTo()`, and asked again on every search: a resource the user may no longer open, or that is
-     * no longer offered under "Search in", widens it.
+     * no longer offered as a choice of the chips, widens it.
      */
     #[Locked]
     public ?string $scope = null;
@@ -79,6 +84,15 @@ final class RecordPalette extends Component
         'total' => 0,
         'capacity' => 0,
     ];
+
+    /**
+     * The slots of the rows, rendered from the records themselves: HTML never goes into `found`, which is the
+     * snapshot the browser gets and sends back on every request. Filled by a search; a request that did not search
+     * loads the records again by their keys.
+     *
+     * @var array<string, array<string, RenderedPaletteRow>> By morph alias, then by record key.
+     */
+    private array $renderedRows = [];
 
     public function updatedPhrase(#[\SensitiveParameter] mixed $value = null): void
     {
@@ -103,7 +117,7 @@ final class RecordPalette extends Component
     }
 
     /**
-     * Narrows the search to one resource of "Search in", or back to every resource when it is the one already
+     * Narrows the search to one resource of the chips, or back to every resource when it is the one already
      * chosen. Only a resource listed there is accepted: one the user may open and search, and that is offered.
      */
     public function scopeTo(string $type): void
@@ -178,33 +192,36 @@ final class RecordPalette extends Component
     }
 
     /**
-     * Opens a record of the current results, when the user may still open it.
+     * Opens a record when the user may open it now: a resource that is bound and accessible, and a record inside its
+     * scope. The record need not be among the current results, so a click never does nothing because the results
+     * moved on meanwhile; the scope and the resource's own access are what is enforced.
      */
     public function open(string $type, string $id): void
     {
-        if (! $this->isFound($type, $id)) {
-            return;
-        }
-
         $binding = $this->bindingOfType($type);
 
         if (! $binding instanceof ResourceBinding || ! $binding->isAccessible()) {
             return;
         }
 
-        // The resource's own scope, as a subquery, so an orWhere in it cannot widen the lookup.
-        $modelClass = $binding->modelClass();
-        $model = new $modelClass;
-        $record = $model->newQuery()
-            ->whereKey($id)
-            ->whereIn($model->getQualifiedKeyName(), HostScope::of($binding->scope())->select($model->getQualifiedKeyName()))
-            ->first();
+        $record = $binding->recordsInScope([$id])->first();
 
         $url = $record instanceof Model ? $binding->url($record) : null;
 
         if ($url !== null) {
+            resolve(PaletteHistory::class)->record(Filament::auth()->user(), $type, (string) $record->getKey());
+
             $this->redirect($url, navigate: true);
         }
+    }
+
+    /**
+     * Forgets what the current user opened from the palette.
+     */
+    public function clearHistory(): void
+    {
+        resolve(PaletteHistory::class)->clear(Filament::auth()->user());
+
     }
 
     public function render(): View
@@ -219,13 +236,24 @@ final class RecordPalette extends Component
         $identifierShaped = PhraseKind::isIdentifierShaped($phrase);
 
         // Asked once per render, for the list and for the label alike.
-        $choices = $isShort || $this->scope !== null ? $this->scopeChoices() : [];
+        $choices = $this->scopeChoices();
         $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $choices);
+        $listUrl = $scoped instanceof ResourceBinding && $found['groups'] !== [] ? $scoped->listUrl($phrase) : null;
+
+        // Only an empty field: one character already asks for a second one, and the history would not match it.
+        $recent = $phrase === '' ? $this->recentOpened() : ['items' => [], 'rows' => []];
+        $chips = count($choices) >= 2 ? $this->chips($choices) : [];
 
         return view('filament-model-search::livewire.record-palette', [
+            'recentItems' => $recent['items'],
+            'recentRows' => $recent['rows'],
             'groups' => $found['groups'],
-            'welcome' => $isShort ? $this->welcome($choices) : [],
-            'scopeLabel' => $scoped instanceof ResourceBinding ? Str::ucfirst($scoped->label()) : null,
+            'rows' => $this->rowsOf($found['groups']),
+            'chips' => $chips,
+            'chipsHaveIcons' => $chips !== [] && ! in_array(null, array_column($chips, 'icon'), true),
+            'listUrl' => $listUrl,
+            'listLabel' => $scoped instanceof ResourceBinding ? $scoped->label() : null,
+            'phraseShown' => $phrase,
             'outcome' => $outcome,
             'offersEveryStage' => $found['stage'] && ! $this->everyStage && ! $this->similar,
             'offersSimilar' => $this->offersSimilar(),
@@ -296,21 +324,28 @@ final class RecordPalette extends Component
     }
 
     /**
-     * What the search can be narrowed to, shown before anything is typed.
+     * What the search can be narrowed to, in the order of the navigation: the chips under the field.
      *
-     * @param  list<ResourceBinding>  $bindings  The current choices of "Search in".
-     * @return list<PaletteWelcomeEntry>
+     * @param  list<ResourceBinding>  $bindings  The current choices of the narrowing.
+     * @return list<PaletteChip>
      */
-    private function welcome(array $bindings): array
+    private function chips(array $bindings): array
     {
         usort($bindings, static fn (ResourceBinding $a, ResourceBinding $b): int => $a->sort() <=> $b->sort());
 
-        return array_map(fn (ResourceBinding $binding): array => [
+        $chips = array_map(fn (ResourceBinding $binding): array => [
             'type' => $this->alias($binding),
             'label' => Str::ucfirst($binding->label()),
             'icon' => $this->iconName($binding->icon()),
             'current' => $this->alias($binding) === $this->scope,
         ], $bindings);
+
+        // Icons on some chips and not others make a ragged row: either every chip has one, "All" included, or none does.
+        if (in_array(null, array_column($chips, 'icon'), true)) {
+            return array_map(static fn (array $chip): array => ['icon' => null] + $chip, $chips);
+        }
+
+        return $chips;
     }
 
     /**
@@ -325,7 +360,7 @@ final class RecordPalette extends Component
     }
 
     /**
-     * The resources of "Search in": offered there, the user may open them now and they have a search of their own.
+     * The resources of the chips: offered there, the user may open them now and they have a search of their own.
      *
      * @return list<ResourceBinding>
      */
@@ -342,7 +377,7 @@ final class RecordPalette extends Component
     /**
      * The one place that says whether a type may narrow the search right now.
      *
-     * @param  list<ResourceBinding>  $choices  The current choices of "Search in".
+     * @param  list<ResourceBinding>  $choices  The current choices of the chips.
      */
     private function scopeChoice(string $type, array $choices): ?ResourceBinding
     {
@@ -357,6 +392,8 @@ final class RecordPalette extends Component
 
     private function search(): void
     {
+        $this->renderedRows = [];
+
         $phrase = $this->normalizedPhrase();
 
         if (mb_strlen($phrase) < self::MIN_LENGTH) {
@@ -366,8 +403,9 @@ final class RecordPalette extends Component
         }
 
         // Asked now, never remembered: the user may have changed since the palette was opened. A resource that can
-        // no longer narrow the search (the user may not open it, or it left "Search in") widens it to every resource.
-        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $this->scopeChoices());
+        // no longer narrow the search (the user may not open it, or it left the chips) widens it to every resource.
+        $choices = $this->scopeChoices();
+        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $choices);
 
         if (! $scoped instanceof ResourceBinding) {
             $this->scope = null;
@@ -389,7 +427,8 @@ final class RecordPalette extends Component
             : max(1, $this->configInt('palette.per_scope', 20));
 
         try {
-            $answers = $this->answers($bindings, $phrase, $perGroup);
+            // One more than is shown, to know whether a group has more to show.
+            $answers = $this->answers($bindings, $phrase, $perGroup + 1);
         } catch (Throwable $exception) {
             $outcome = SearchOutcome::fromException($exception);
 
@@ -402,7 +441,7 @@ final class RecordPalette extends Component
             return;
         }
 
-        $this->found = $this->present($bindings, $answers, $perGroup);
+        $this->found = $this->present($bindings, $answers, $perGroup, $choices);
     }
 
     /**
@@ -441,9 +480,10 @@ final class RecordPalette extends Component
     /**
      * @param  list<ResourceBinding>  $bindings
      * @param  array<string, SearchResults>  $answers
+     * @param  list<ResourceBinding>  $choices  What the search can be narrowed to, which decides who offers "show all".
      * @return PaletteFound
      */
-    private function present(array $bindings, array $answers, int $perGroup): array
+    private function present(array $bindings, array $answers, int $perGroup, array $choices): array
     {
         $groups = [];
         $stage = false;
@@ -463,7 +503,7 @@ final class RecordPalette extends Component
             $timedOut = $timedOut || $results->timedOut;
             $indexBuilding = $indexBuilding || $results->indexBuilding;
 
-            $group = $this->group($binding, $results);
+            $group = $this->group($binding, $results, $perGroup, $this->scope === null && $this->scopeChoice($this->alias($binding), $choices) instanceof ResourceBinding);
 
             if ($group['items'] !== []) {
                 $total += count($group['items']);
@@ -494,20 +534,34 @@ final class RecordPalette extends Component
     /**
      * @return PaletteGroup
      */
-    private function group(ResourceBinding $binding, SearchResults $results): array
+    private function group(ResourceBinding $binding, SearchResults $results, int $perGroup, bool $canNarrow): array
     {
         $items = [];
+
+        // One more was asked for than is shown: its presence is the whole answer to "is there more".
+        $hits = iterator_to_array($results, false);
+        $more = count($hits) > $perGroup;
+        $hits = array_slice($hits, 0, $perGroup);
 
         // What the details read, once for all records (the scope's own eager loads).
         $records = new EloquentCollection;
 
-        foreach ($results as $result) {
+        foreach ($hits as $result) {
             $records->push($result->model);
         }
 
         $records->loadMissing($binding->scope()->getEagerLoads());
 
-        foreach ($results as $result) {
+        $row = $binding->paletteRow();
+        $rows = [];
+
+        if ($row instanceof SearchResultRow) {
+            $records->loadMissing($row->with());
+            $rows = new PaletteRowRenderer($binding->resourceClass(), $row)->render($records);
+            $this->renderedRows[$this->alias($binding)] = $rows;
+        }
+
+        foreach ($hits as $result) {
             $url = $binding->url($result->model);
 
             if (blank($url)) {
@@ -520,8 +574,16 @@ final class RecordPalette extends Component
 
             $details = $binding->details($result->model);
 
-            // A value the second line already shows needs no line of its own.
-            if ($line !== null && in_array($line[1], array_column($details, 'value'), true)) {
+            $rendered = $rows[(string) $result->model->getKey()] ?? null;
+
+            // A value the row already shows needs no line of its own: the details line, unless the slots replace
+            // it, and whatever the slots say.
+            $detailsShown = ! $rendered instanceof RenderedPaletteRow || $rendered->belowTitle === '';
+
+            if ($line !== null && (
+                ($detailsShown && in_array($line[1], array_column($details, 'value'), true))
+                || ($rendered instanceof RenderedPaletteRow && $rendered->shows($line[1]))
+            )) {
                 $line = null;
             }
 
@@ -549,9 +611,133 @@ final class RecordPalette extends Component
         return [
             'type' => $this->alias($binding),
             'label' => Str::ucfirst($binding->label()),
+            'pluralLabel' => $binding->label(),
             'icon' => $this->iconName($icon),
             'items' => $items,
+            'more' => $more && $canNarrow,
         ];
+    }
+
+    /**
+     * The records the current user opened from the palette, newest first, in the rows the results use. A record is
+     * skipped when it was deleted, when the user may no longer open it, or when its resource is no longer bound,
+     * accessible or shown by this panel: the history is a list of what can be opened now, not of what was.
+     *
+     * @return array{items: list<RecentItem>, rows: array<string, array<string, RenderedPaletteRow>>}
+     */
+    private function recentOpened(): array
+    {
+        $history = resolve(PaletteHistory::class);
+        $entries = $history->recent(Filament::auth()->user());
+
+        if ($entries === []) {
+            return ['items' => [], 'rows' => []];
+        }
+
+        $keysByType = [];
+
+        foreach ($entries as $entry) {
+            $keysByType[$entry['type']][] = $entry['key'];
+        }
+
+        $limit = max(1, $this->configInt('palette.history.limit', 5));
+        $records = [];
+        $bindings = [];
+        $rows = [];
+
+        foreach ($keysByType as $type => $keys) {
+            $binding = $this->bindingOfType((string) $type);
+
+            if (! $binding instanceof ResourceBinding || ! $binding->isAccessible()) {
+                continue;
+            }
+
+            $bindings[$type] = $binding;
+            $loaded = $binding->recordsInScope($keys);
+            $records[$type] = $loaded->keyBy(static fn (Model $record): string => (string) $record->getKey());
+        }
+
+        $items = [];
+        $shown = [];
+
+        foreach ($entries as $entry) {
+            $record = ($records[$entry['type']] ?? null)?->get($entry['key']);
+            $binding = $bindings[$entry['type']] ?? null;
+
+            if (! $record instanceof Model || ! $binding instanceof ResourceBinding) {
+                continue;
+            }
+
+            $url = $binding->url($record);
+
+            if (blank($url)) {
+                continue;
+            }
+
+            $title = $binding->title($record);
+
+            $items[] = [
+                'type' => $entry['type'],
+                'id' => $entry['key'],
+                'title' => $title instanceof Htmlable ? strip_tags($title->toHtml()) : $title,
+                'url' => $url,
+                'details' => $binding->details($record),
+                'image' => $binding->image($record),
+                'icon' => $this->iconName($binding->icon()),
+            ];
+            $shown[$entry['type']][] = $record;
+
+            if (count($items) === $limit) {
+                break;
+            }
+        }
+
+        // Only what is shown is rendered.
+        foreach ($shown as $type => $shownRecords) {
+            $row = $bindings[$type]->paletteRow();
+
+            if ($row instanceof SearchResultRow) {
+                $rows[$type] = new PaletteRowRenderer($bindings[$type]->resourceClass(), $row)->render($shownRecords);
+            }
+        }
+
+        return ['items' => $items, 'rows' => $rows];
+    }
+
+    /**
+     * The rendered slots of what is on screen, for the resources that describe their rows. A search rendered them
+     * already; any other request loads the records again, inside the scope of their resource and only while the user
+     * may still open it.
+     *
+     * @param  list<PaletteGroup>  $groups
+     * @return array<string, array<string, RenderedPaletteRow>> By morph alias, then by record key.
+     */
+    private function rowsOf(array $groups): array
+    {
+        $rows = [];
+
+        foreach ($groups as $group) {
+            $binding = $this->bindingOfType($group['type']);
+            $row = $binding?->paletteRow();
+
+            if (! $binding instanceof ResourceBinding || ! $row instanceof SearchResultRow || ! $binding->isAccessible()) {
+                continue;
+            }
+
+            $known = $this->renderedRows[$group['type']] ?? [];
+            $missing = array_values(array_filter(
+                array_column($group['items'], 'id'),
+                static fn (string $id): bool => ! isset($known[$id]),
+            ));
+
+            if ($missing !== []) {
+                $known += new PaletteRowRenderer($binding->resourceClass(), $row)->render($binding->recordsInScope($missing));
+            }
+
+            $rows[$group['type']] = $known;
+        }
+
+        return $rows;
     }
 
     /**
@@ -581,23 +767,6 @@ final class RecordPalette extends Component
         }
 
         return null;
-    }
-
-    private function isFound(string $type, string $id): bool
-    {
-        foreach ($this->found['groups'] as $group) {
-            if ($group['type'] !== $type) {
-                continue;
-            }
-
-            foreach ($group['items'] as $item) {
-                if ($item['id'] === $id) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     private function bindingOfType(string $type): ?ResourceBinding

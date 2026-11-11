@@ -2,7 +2,12 @@
 
 declare(strict_types=1);
 
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\TextColumn;
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
+use Illuminate\Support\Str;
 use Pest\Browser\Playwright\Playwright;
 
 covers(RecordPalette::class);
@@ -112,7 +117,7 @@ it('keeps the layout of the highlighted row and drops a stale highlight', functi
     $this->indexAll();
 
     $page = visit('/admin/orders')->on()->mobile()->assertScript(PALETTE_READY, true);
-    $page->click('button[aria-label="'.trans('filament-model-search::record-palette.trigger').'"]')->type(PALETTE_INPUT, 'OR-100')->assertScript(PALETTE_OPTIONS.'.length', 2);
+    $page->click('button[aria-label="'.trans('filament-model-search::record-palette.trigger').'"]')->type(PALETTE_INPUT, 'OR-100')->assertScript('document.querySelectorAll("[data-palette-result]").length', 2);
 
     $page->assertScript('(() => { const o = '.PALETTE_OPTIONS.'[0]; const s = getComputedStyle(o); return o.classList.contains("fi-selected") && s.display === "flex" && s.paddingLeft === "8px" })()', true)
         ->assertScript('(() => { const o = '.PALETTE_OPTIONS.'[0]; const w = document.querySelector(".fi-modal-window").getBoundingClientRect(); return o.scrollWidth <= o.clientWidth && o.getBoundingClientRect().right <= w.right })()', true);
@@ -203,4 +208,120 @@ it('is fetched only when called, searches related records with Tab and clears th
         ->assertScript('document.querySelector("'.PALETTE_INPUT.'").value', '')
         ->assertScript('document.querySelectorAll("[data-palette-result]").length', 0)
         ->assertScript($focused, true);
+});
+
+it('shows the type chips under the empty field, narrows with a click and widens with All', function () use ($trigger): void {
+    $this->createOrder('OR-1005', '565656');
+    $this->createCustomer('Chip Customer', null, '565656');
+    $this->indexAll();
+
+    $chips = 'document.querySelectorAll(".fi-record-palette-chip")';
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->assertScript($chips.'.length', 3)
+        ->assertScript(PALETTE_OPTIONS.'.length', 0)
+        ->assertScript('document.querySelector(".fi-record-palette-chip.fi-active").textContent.trim()', trans('filament-model-search::record-palette.all'));
+
+    $page->type(PALETTE_INPUT, '565656')->assertScript('document.querySelectorAll("[data-palette-result]").length', 2);
+    $page->script($chips.'[2].click()');
+    $page->assertScript('document.querySelectorAll("[data-palette-result]").length', 1)
+        ->assertScript('document.querySelector(".fi-record-palette-chip.fi-active").textContent.trim()', Str::ucfirst(CustomerResource::getPluralModelLabel()));
+    $page->script($chips.'[0].click()');
+    $page->assertScript('document.querySelectorAll("[data-palette-result]").length', 2);
+});
+
+it('notes a record opened with a plain click and offers it, with Clear history, on the next visit', function () use ($trigger): void {
+    $order = $this->createOrder('OR-1006', '575757');
+    $this->indexAll();
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->type(PALETTE_INPUT, '575757')->assertScript('document.querySelectorAll("[data-palette-result]").length', 1);
+    $page->script('document.querySelector("[data-palette-result]").click()');
+    $page->assertScript('window.location.pathname', parse_url((string) OrderResource::getUrl('view', ['record' => $order]), PHP_URL_PATH));
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->assertScript('document.querySelector("#filament-model-search-palette-option-order-'.$order->getKey().'") !== null', true)
+        ->assertScript('document.querySelector("#filament-model-search-palette-option-clear-history") !== null', true);
+
+    $page->script('document.querySelector("#filament-model-search-palette-option-clear-history").click()');
+    $page->assertScript('document.querySelector("#filament-model-search-palette-option-clear-history") === null', true);
+});
+
+it('clears the narrowing with Backspace in an empty field', function () use ($trigger): void {
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->assertScript('document.querySelectorAll(".fi-record-palette-chip").length', 3);
+    $page->script('document.querySelectorAll(".fi-record-palette-chip")[1].click()');
+    $page->assertScript('document.querySelectorAll(".fi-record-palette-chip")[1].classList.contains("fi-active")', true);
+    // Backspace reads the scope the server confirmed: wait for it, the way a person waits for the results of the chip.
+    $page->assertScript('(async () => { for (let i = 0; i < 200; i++) { const c = window.Livewire.all().find((c) => c.name === "filament-model-search.record-palette"); if (c && c.$wire.scope !== null) return true; await new Promise((r) => setTimeout(r, 50)) } return false })()', true);
+
+    // Waited for, not read once: the narrowing comes back from the server, and WebKit answers later than Chromium.
+    $page->keys(PALETTE_INPUT, 'Backspace')
+        ->assertScript('(async () => { for (let i = 0; i < 200; i++) { if (document.querySelectorAll(".fi-record-palette-chip")[0].classList.contains("fi-active")) return true; await new Promise((r) => setTimeout(r, 50)) } return false })()', true);
+});
+
+it('starts the text of a row slot where the title starts, for a plain column and for a layout', function (): void {
+    config(['fixtures.order_row' => [
+        'belowTitle' => [Split::make([TextColumn::make('signature')])],
+        'aboveTitle' => [TextColumn::make('state')],
+    ]]);
+    $this->createOrder('OR-1007', '585858');
+    $this->indexAll();
+
+    // Where the first character of the text sits, whatever wrappers surround it.
+    $left = static fn (string $selector): string => '(() => { const e = document.querySelector("'.$selector.'"); const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP }); const r = document.createRange(); r.selectNodeContents(w.nextNode()); return Math.round(r.getBoundingClientRect().left) })()';
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click('button[aria-label="'.trans('filament-model-search::record-palette.trigger').'"]');
+    $page->type(PALETTE_INPUT, '585858')->assertScript('document.querySelectorAll("[data-palette-result]").length', 1);
+
+    $title = $page->script($left('.fi-record-palette-row-title'));
+
+    // Within a pixel: WebKit rounds sub-pixel offsets of nested boxes differently from Chromium.
+    expect(abs($page->script($left('.fi-record-palette-row-below')) - $title))->toBeLessThanOrEqual(1)
+        ->and(abs($page->script($left('.fi-record-palette-row-above')) - $title))->toBeLessThanOrEqual(1);
+});
+
+it('closes the palette with the field button when nothing is typed, and clears the phrase when something is', function () use ($focused, $trigger): void {
+    $this->createOrder('OR-3101', '555311');
+    $this->indexAll();
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger())->assertScript($focused, true);
+
+    $page->assertScript('document.querySelector(".fi-record-palette-search-tail button").getAttribute("aria-label")', trans('filament-model-search::record-palette.close'))
+        ->type(PALETTE_INPUT, 'OR-310')->assertScript('document.querySelectorAll("[data-palette-result]").length', 1)
+        ->assertScript('document.querySelector(".fi-record-palette-search-tail button").getAttribute("aria-label")', trans('filament-model-search::record-palette.clear'))
+        ->click('.fi-record-palette-search-tail button')
+        ->assertScript('document.querySelector("'.PALETTE_INPUT.'").value', '')
+        ->assertScript(PALETTE_OPEN, true)
+        ->click('.fi-record-palette-search-tail button')
+        ->assertScript(PALETTE_OPEN, false);
+});
+
+it('fits above a phone keyboard: the window ends inside the visual viewport and the results scroll in it', function () use ($focused, $trigger): void {
+    config(['filament-model-search.palette.per_group' => 40]);
+    foreach (range(1, 30) as $i) {
+        $this->createOrder('OR-40'.$i, '55540'.$i);
+    }
+    $this->indexAll();
+
+    $page = visit('/admin/orders')->on()->mobile()->assertScript(PALETTE_READY, true);
+    $page->click($trigger())->assertScript($focused, true)
+        ->type(PALETTE_INPUT, 'OR-40')->assertScript('document.querySelectorAll("[data-palette-result]").length', 30);
+
+    // A keyboard does not resize the layout viewport on iOS, only the visual one: shrink that one, the way the keyboard does.
+    $page->script('(() => { Object.defineProperty(window.visualViewport, "height", { configurable: true, get: () => 320 }); window.visualViewport.dispatchEvent(new Event("resize")) })()');
+
+    $page->assertScript('(() => { const w = document.querySelector(".fi-modal-window").getBoundingClientRect(); return w.bottom <= 320 + 1 })()', true)
+        ->assertScript('(() => { const l = document.querySelector("[role=listbox]"); return l.scrollHeight > l.clientHeight && l.clientHeight > 0 })()', true)
+        ->assertScript('document.querySelector("'.PALETTE_INPUT.'").getBoundingClientRect().top >= 0', true);
+});
+
+it('puts "search all" and "search for similar" on one line on a wide screen', function () use ($trigger): void {
+    $this->createOrder('OR-3201', '555321');
+    $this->createOrder('OR-3202', '555322');
+    $this->indexAll();
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->type(PALETTE_INPUT, 'OR-320')->assertScript('document.querySelectorAll("[data-palette-result]").length', 2);
+
+    $page->assertScript('(() => { const o = [...document.querySelectorAll(".fi-record-palette-widen [role=option]")]; return o.length >= 1 && o.every((e) => Math.abs(e.getBoundingClientRect().top - o[0].getBoundingClientRect().top) < 2) && o.every((e) => e.getBoundingClientRect().height <= 32) })()', true);
 });

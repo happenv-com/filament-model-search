@@ -6,7 +6,7 @@ description: >-
   resource to a search definition (InteractsWithModelSearch, FilamentModelSearchPlugin::resources(),
   FilamentModelSearch::resource()), calling ->modelSearch() on a Table, Select or SelectFilter,
   replacing a resource's global search (getGlobalSearchResults, getGlobalSearchEloquentQuery),
-  configuring the record palette (rows, related term magnifier, "Search in", trigger, keybindings,
+  configuring the record palette (rows, related term magnifier, type chips, trigger, keybindings,
   per_group / per_scope), or testing any of these.
 ---
 
@@ -109,23 +109,27 @@ Dispatch `open-modal` synchronously from the click (iOS raises the keyboard only
 | `getGlobalSearchResultTitle()` | the title |
 | `getGlobalSearchResultDetails()` | the second line; eager load what it reads in `getGlobalSearchEloquentQuery()` |
 | `getGlobalSearchResultImage(Model $record): ?string` | a picture instead of the resource icon (optional) |
+| `getGlobalSearchResultRow(): ?string` | a subclass of `Happenv\FilamentModelSearch\Palette\SearchResultRow` (built by the container) describing the row with table columns: `leading()`, `aboveTitle()`, `besideTitle()`, `belowTitle()`, `trailing()` return columns or `Split`/`Stack` layouts, `with()` the relations to eager load once per group (optional). Empty slots fall back to the image/icon and the details line. Editable columns and columns with `url()`/`action()` throw a `LogicException` (the row is itself the link; `disabledClick()` allows display). |
 | `getGlobalSearchResultRelatedTerm(Model $record): ?string` | a magnifier (and Tab) that puts this term in the field and searches every resource for it (optional). Not shown when it equals the phrase already searched. |
-| `isOfferedAsPaletteScope(): bool` | `false` keeps the resource out of "Search in" (optional, offered by default). It is still searched everywhere. |
+| `isOfferedAsPaletteScope(): bool` | `false` keeps the resource out of the chips (optional, offered by default). It is still searched everywhere. |
 
 Return `null` (or leave the method out) for no picture or no magnifier. What a related term reveals is the resource's responsibility: return only a value the current viewer may see.
 
 ### Behaviour to keep in mind
 
-- **"Search in"**, shown before anything is typed, narrows the search to one resource ("Search in: Orders"); choosing it again, the cross or Backspace in an empty field searches everywhere. Up to `palette.per_scope` records come back instead of `palette.per_group`.
+- **Type chips** under the field ("All" plus one per resource that can be chosen, at least two) narrow the search to one resource; "All", the chosen chip again or Backspace in an empty field searches everywhere. Up to `palette.per_scope` records come back instead of `palette.per_group`.
+- A group with more than `palette.per_group` records ends with "Show all <resources>" (narrows to that resource, not shown for a resource kept out of the chips); a narrowed search ends with a link to the resource's list with the phrase in `?search=`.
+- **Recently opened** (empty field): the last records the current user opened from the palette, newest first, same rows as results without the match line or magnifier, plus "Clear history". Stored per user as type + key + time in `palette.history.table` (migration loaded by the package unless `palette.history.run_migrations` is false; publish tag `filament-model-search-migrations`); never the phrase. Plain clicks go through `open()`, modified clicks stay native and are not noted. `palette.history.enabled`, `limit`, `keep`.
 - "Search all" repeats a staged search over every stage; "Search for similar" (`mod+enter`) runs typo tolerance only when asked.
 - Timed-out, index-building, rate-limited, unavailable and empty answers are separate states; results that came back are shown with a notice.
-- What was found and the scope live in locked Livewire properties; `open()` and `searchRelated()` accept only records of the current results, and access is asked again.
+- What was found and the scope live in locked Livewire properties. `searchRelated()` accepts only a term a record of the current results offered; `open()` opens any record the user may open now (a bound, accessible resource and a record inside its scope), so a click still works when the results moved on, and access is asked again every time.
 
 ## Configuration
 
-- `config/filament-model-search.php` (`php artisan vendor:publish --tag=filament-model-search-config`): `palette.enabled`, `palette.trigger`, `palette.keybindings`, `palette.debounce_ms`, `palette.per_group`, `palette.per_scope`, `palette.placeholder` (a translation key), `readiness_cache_seconds`.
+- `config/filament-model-search.php` (`php artisan vendor:publish --tag=filament-model-search-config`): `palette.enabled`, `palette.trigger`, `palette.keybindings`, `palette.debounce_ms`, `palette.per_group`, `palette.per_scope`, `palette.history.*`, `palette.placeholder` (a translation key), `readiness_cache_seconds`.
 - `paletteTrigger()` overrides `palette.trigger`. The palette is offered only when both `palette()` and `palette.enabled` are on.
 - Texts live under `filament-model-search::` in `en`, `pl` and `de`; publish with `--tag=filament-model-search-translations`.
+- v0.4.0 removed the `welcome_heading`, `scope` and `clear_scope` keys and added `all`, `scope_label`, `show_all`, `open_list_with_phrase`, `open_list_enter`, `recently_opened` and `clear_history`.
 - v0.3.0 added the `narrow`, `scope`, `clear_scope` and `search_term` keys and removed `open_list`: an app that published the translations before must republish them (or add the keys).
 
 ## Testing
