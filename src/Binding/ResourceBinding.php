@@ -154,6 +154,18 @@ final readonly class ResourceBinding
         return $this->optionalString('getGlobalSearchResultRelatedTerm', $record);
     }
 
+    /**
+     * Whether the palette lists the resource under "Search in", so that the search can be narrowed to it: the
+     * optional static `isOfferedAsPaletteScope(): bool` of the resource, offered without one. A resource left out
+     * is still searched everywhere; it only cannot be chosen alone.
+     */
+    public function offersScope(): bool
+    {
+        $resource = $this->resourceClass;
+
+        return ! method_exists($resource, 'isOfferedAsPaletteScope') || $resource::isOfferedAsPaletteScope() === true;
+    }
+
     private function optionalString(string $method, Model $record): ?string
     {
         $resource = $this->resourceClass;

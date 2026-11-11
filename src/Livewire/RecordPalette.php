@@ -56,7 +56,8 @@ final class RecordPalette extends Component
 
     /**
      * The morph alias of the one resource the search is narrowed to, or null for every resource. Set only
-     * through `scopeTo()`, and asked again on every search: a resource the user may no longer open widens it.
+     * through `scopeTo()`, and asked again on every search: a resource the user may no longer open, or that is
+     * no longer offered under "Search in", widens it.
      */
     #[Locked]
     public ?string $scope = null;
@@ -103,7 +104,7 @@ final class RecordPalette extends Component
 
     /**
      * Narrows the search to one resource of "Search in", or back to every resource when it is the one already
-     * chosen. Only a resource the user may open and search is accepted.
+     * chosen. Only a resource listed there is accepted: one the user may open and search, and that is offered.
      */
     public function scopeTo(string $type): void
     {
@@ -113,7 +114,7 @@ final class RecordPalette extends Component
             return;
         }
 
-        if (! $this->searchableBinding($type) instanceof ResourceBinding) {
+        if (! $this->scopeChoice($type) instanceof ResourceBinding) {
             return;
         }
 
@@ -217,7 +218,7 @@ final class RecordPalette extends Component
         $offersWiden = $this->offersWiden();
         $identifierShaped = PhraseKind::isIdentifierShaped($phrase);
 
-        $scoped = $this->scope === null ? null : $this->searchableBinding($this->scope);
+        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope);
 
         return view('filament-model-search::livewire.record-palette', [
             'groups' => $found['groups'],
@@ -299,7 +300,7 @@ final class RecordPalette extends Component
      */
     private function welcome(): array
     {
-        $bindings = $this->searchableBindings();
+        $bindings = $this->scopeChoices();
 
         usort($bindings, static fn (ResourceBinding $a, ResourceBinding $b): int => $a->sort() <=> $b->sort());
 
@@ -323,21 +324,23 @@ final class RecordPalette extends Component
     }
 
     /**
-     * The resources the user may open now and that have a search of their own.
+     * The resources of "Search in": offered there, the user may open them now and they have a search of their own.
      *
      * @return list<ResourceBinding>
      */
-    private function searchableBindings(): array
+    private function scopeChoices(): array
     {
         return array_values(array_filter(
             resolve(ResourceBindings::class)->all(),
-            static fn (ResourceBinding $binding): bool => $binding->isAccessible() && is_subclass_of($binding->searchClass(), ModelSearch::class),
+            static fn (ResourceBinding $binding): bool => $binding->offersScope()
+                && $binding->isAccessible()
+                && is_subclass_of($binding->searchClass(), ModelSearch::class),
         ));
     }
 
-    private function searchableBinding(string $type): ?ResourceBinding
+    private function scopeChoice(string $type): ?ResourceBinding
     {
-        foreach ($this->searchableBindings() as $binding) {
+        foreach ($this->scopeChoices() as $binding) {
             if ($this->alias($binding) === $type) {
                 return $binding;
             }
@@ -362,9 +365,9 @@ final class RecordPalette extends Component
             static fn (ResourceBinding $binding): bool => $binding->isAccessible(),
         ));
 
-        // A resource the user may no longer open cannot narrow anything: the search widens to every resource.
+        // A resource the user may no longer open, or no longer offered, cannot narrow anything: the search widens to every resource.
         if ($this->scope !== null) {
-            $scoped = array_values(array_filter($bindings, fn (ResourceBinding $binding): bool => $this->alias($binding) === $this->scope));
+            $scoped = array_values(array_filter($bindings, fn (ResourceBinding $binding): bool => $binding->offersScope() && $this->alias($binding) === $this->scope));
             $this->scope = $scoped === [] ? null : $this->scope;
             $bindings = $scoped === [] ? $bindings : $scoped;
         }

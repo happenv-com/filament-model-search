@@ -29,6 +29,7 @@ beforeEach(function (): void {
         'fixtures.order_icon' => null,
         'fixtures.order_image' => null,
         'fixtures.order_related_term' => null,
+        'fixtures.order_offered_as_palette_scope' => null,
     ]);
 });
 
@@ -642,6 +643,21 @@ describe('search in one resource', function (): void {
 
         $component->call('scopeTo', 'order')->call('clearScope')->assertSet('scope', null);
         expect(array_column($component->get('found')['groups'], 'type'))->toBe(['order', 'customer']);
+    });
+
+    it('leaves out of "Search in" a resource that is not offered there, and still searches it everywhere', function (): void {
+        config(['fixtures.order_offered_as_palette_scope' => false]);
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-60', '606060');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)
+            ->assertSeeHtml('wire:click="scopeTo(\'customer\')"')
+            ->assertDontSeeHtml('wire:click="scopeTo(\'order\')"')
+            ->call('scopeTo', 'order')->assertSet('scope', null)
+            ->set('phrase', '606060');
+
+        expect(array_column($component->get('found')['groups'], 'type'))->toBe(['order']);
     });
 
     it('refuses a resource the user may not open', function (): void {
