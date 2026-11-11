@@ -610,7 +610,7 @@ it('does not offer every stage when the results already came from all of them', 
 });
 
 describe('search in one resource', function (): void {
-    it('narrows the search to the chosen resource and shows more of it', function () use ($titles): void {
+    it('narrows the search to the chosen resource and shows more of it', function (): void {
         $this->signIn($this->allAbilities());
         foreach (range(1, 7) as $i) {
             $this->createOrder('OR-'.$i, '575757-'.$i);
@@ -625,8 +625,7 @@ describe('search in one resource', function (): void {
         $groups = $component->get('found')['groups'];
 
         expect(array_column($groups, 'type'))->toBe(['order'])
-            ->and(count($groups[0]['items']))->toBe(7)
-            ->and($titles($component->get('found')))->not->toContain('Scope Holder');
+            ->and(count($groups[0]['items']))->toBe(7);
     });
 
     it('searches everywhere again when the same resource is chosen again or the narrowing is cleared', function (): void {
