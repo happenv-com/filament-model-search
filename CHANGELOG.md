@@ -2,26 +2,6 @@
 
 All notable changes to `filament-model-search` will be documented in this file.
 
-## Unreleased
-
-### Record palette
-
-- **Rows described with table columns.** A resource names a `SearchResultRow` subclass from the optional static `getGlobalSearchResultRow(): ?string`; its `leading()`, `aboveTitle()`, `besideTitle()`, `belowTitle()` and `trailing()` return Filament columns, `with()` the relations to load once per group. A resource without one renders exactly as before. Interactive columns (editable, `url()`, `action()`) are refused with a `LogicException`.
-- **Type chips** replace "Search in": a row under the field, for an empty field and for results, with "All" and one chip per resource that can be chosen (icon and label, navigation order). Shown when at least two can be chosen. The welcome list and the "Search in: ..." label inside the field are gone; Backspace in an empty field still clears the narrowing.
-- **"Show all <resources>"** ends a group that has more than `palette.per_group` records and narrows the search to that resource.
-- **"Open the <resources> list with “phrase”"** is the last option of a narrowed search: the list page with the phrase in the table search (`ResourceBinding::listUrl()`).
-- **"Recently opened"** while the field is empty: the last records the signed-in user opened from the palette (newest first, every type, the same rows as results, no match line or magnifier), with a quiet "Clear history" option at the bottom. Only the type and key of the record, the user and the time are stored, never the phrase. A plain click on a result goes through the component (`open()`) so it is noted; modified clicks stay native and are not noted. Configured under `palette.history` (`enabled`, `limit`, `keep`, `table`, `run_migrations`).
-- The match line is also dropped when the row's own columns already show its value.
-- `open()` opens any record the user may open through the resource's scope, whether or not it is still among the results (a click never does nothing because the results moved on).
-
-### Upgrading
-
-- **Run the migration** (`php artisan migrate`): it creates the `model_search_palette_history` table. The package loads it itself. A host that manages its own migrations sets `palette.history.run_migrations` to `false` and publishes it with `php artisan vendor:publish --tag=filament-model-search-migrations`. **The palette needs the table**: without it (migration not run, or not shipped) the palette fails to load. To turn the history off, set `palette.history.enabled` to `false`; the table is then not read.
-- The welcome list of "Search in" and the "Search in: ..." label inside the field are **replaced by chips** under the field.
-- A result is opened by a click handler instead of `wire:navigate` (modified clicks still open natively and are not noted in the history).
-- Translations: `welcome_heading`, `scope` and `clear_scope` are removed; `all`, `scope_label`, `show_all`, `open_list_with_phrase`, `open_list_enter`, `recently_opened` and `clear_history` are new. Published translations need them.
-- A published config that replaces the `palette` array should gain the `history` block (config files merge one level deep).
-
 ## v0.3.1 - 2026-11-11
 
 ### What's Changed
