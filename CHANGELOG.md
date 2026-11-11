@@ -7,6 +7,9 @@ All notable changes to `filament-model-search` will be documented in this file.
 ### Record palette
 
 - **Rows described with table columns.** A resource names a `SearchResultRow` subclass from the optional static `getGlobalSearchResultRow(): ?string`; its `leading()`, `aboveTitle()`, `besideTitle()`, `belowTitle()` and `trailing()` return Filament columns, `with()` the relations to load once per group. A resource without one renders exactly as before. Interactive columns (editable, `url()`, `action()`) are refused with a `LogicException`.
+- **Type chips** replace "Search in": a row under the field, for an empty field and for results, with "All" and one chip per resource that can be chosen (icon and label, navigation order). Shown when at least two can be chosen. The welcome list and the "Search in: ..." label inside the field are gone; Backspace in an empty field still clears the narrowing.
+- **"Show all <resources>"** ends a group that has more than `palette.per_group` records and narrows the search to that resource.
+- **"Open the <resources> list with “phrase”"** is the last option of a narrowed search: the list page with the phrase in the table search (`ResourceBinding::listUrl()`).
 - The match line is also dropped when the row's own columns already show its value.
 
 ## v0.3.1 - 2026-11-11

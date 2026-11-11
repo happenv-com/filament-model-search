@@ -134,49 +134,79 @@
         place-items: center;
     }
 
-    .fi-record-palette-scope {
+    .fi-record-palette-chips {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0 1rem 0.75rem;
+        overflow-x: auto;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
+    }
+
+    .fi-record-palette-chip {
         display: inline-flex;
         flex: none;
         align-items: center;
-        gap: 0.125rem;
-        max-width: 50%;
+        gap: 0.375rem;
         height: 1.75rem;
-        padding-inline: 0.5rem 0.25rem;
-        border-radius: 0.375rem;
-        background-color: color-mix(in oklab, var(--primary-500) 10%, transparent);
-        color: var(--primary-700);
+        padding-inline: 0.625rem;
+        border-radius: 9999px;
+        background-color: var(--gray-100);
+        color: var(--gray-700);
         font-size: 0.75rem;
         font-weight: 500;
         line-height: 1rem;
-
-        &:where(.dark *) {
-            background-color: color-mix(in oklab, var(--primary-400) 15%, transparent);
-            color: var(--primary-300);
-        }
-    }
-
-    .fi-record-palette-scope-label {
-        overflow: hidden;
-        text-overflow: ellipsis;
         white-space: nowrap;
-    }
-
-    .fi-record-palette-scope-clear {
-        display: grid;
-        flex: none;
-        place-items: center;
-        width: 1.25rem;
-        height: 1.25rem;
-        border-radius: 0.25rem;
         cursor: pointer;
 
-        & svg {
-            width: 0.875rem;
-            height: 0.875rem;
+        &:hover {
+            background-color: var(--gray-200);
         }
 
-        &:hover {
-            background-color: color-mix(in oklab, var(--primary-500) 15%, transparent);
+        &:focus-visible {
+            outline: 2px solid var(--primary-600);
+            outline-offset: 1px;
+        }
+
+        &.fi-active {
+            background-color: color-mix(in oklab, var(--primary-500) 12%, transparent);
+            color: var(--primary-700);
+        }
+
+        &:where(.dark *) {
+            background-color: color-mix(in oklab, var(--gray-500) 15%, transparent);
+            color: var(--gray-300);
+
+            &:hover {
+                background-color: color-mix(in oklab, var(--gray-500) 25%, transparent);
+            }
+
+            &.fi-active {
+                background-color: color-mix(in oklab, var(--primary-400) 18%, transparent);
+                color: var(--primary-300);
+            }
+        }
+    }
+
+    .fi-record-palette-chip-icon {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    .fi-record-palette-row-action {
+        color: var(--primary-600);
+
+        & .fi-record-palette-row-title,
+        & .fi-record-palette-row-icon {
+            color: var(--primary-600);
+        }
+
+        &:where(.dark *) .fi-record-palette-row-title,
+        &:where(.dark *) .fi-record-palette-row-icon {
+            color: var(--primary-400);
         }
     }
 

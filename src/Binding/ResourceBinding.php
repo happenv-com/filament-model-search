@@ -151,6 +151,21 @@ final readonly class ResourceBinding
     }
 
     /**
+     * The list page of the resource with the phrase in its table search (the `search` query string of Filament's
+     * list pages), or null when the user may not open a list.
+     */
+    public function listUrl(#[\SensitiveParameter] string $phrase): ?string
+    {
+        $resource = $this->resourceClass;
+
+        if (! $this->isOnCurrentPanel() || ! $resource::hasPage('index') || ! $resource::canViewAny()) {
+            return null;
+        }
+
+        return $resource::getUrl('index', ['search' => $phrase]);
+    }
+
+    /**
      * The second line of a result: what the resource's global search shows under the title.
      *
      * @return list<array{label: string, value: string}>

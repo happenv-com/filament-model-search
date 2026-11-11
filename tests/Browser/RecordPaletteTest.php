@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource;
+use Illuminate\Support\Str;
 use Pest\Browser\Playwright\Playwright;
 
 covers(RecordPalette::class);
@@ -112,7 +114,7 @@ it('keeps the layout of the highlighted row and drops a stale highlight', functi
     $this->indexAll();
 
     $page = visit('/admin/orders')->on()->mobile()->assertScript(PALETTE_READY, true);
-    $page->click('button[aria-label="'.trans('filament-model-search::record-palette.trigger').'"]')->type(PALETTE_INPUT, 'OR-100')->assertScript(PALETTE_OPTIONS.'.length', 2);
+    $page->click('button[aria-label="'.trans('filament-model-search::record-palette.trigger').'"]')->type(PALETTE_INPUT, 'OR-100')->assertScript('document.querySelectorAll("[data-palette-result]").length', 2);
 
     $page->assertScript('(() => { const o = '.PALETTE_OPTIONS.'[0]; const s = getComputedStyle(o); return o.classList.contains("fi-selected") && s.display === "flex" && s.paddingLeft === "8px" })()', true)
         ->assertScript('(() => { const o = '.PALETTE_OPTIONS.'[0]; const w = document.querySelector(".fi-modal-window").getBoundingClientRect(); return o.scrollWidth <= o.clientWidth && o.getBoundingClientRect().right <= w.right })()', true);
@@ -203,4 +205,23 @@ it('is fetched only when called, searches related records with Tab and clears th
         ->assertScript('document.querySelector("'.PALETTE_INPUT.'").value', '')
         ->assertScript('document.querySelectorAll("[data-palette-result]").length', 0)
         ->assertScript($focused, true);
+});
+
+it('shows the type chips under the empty field, narrows with a click and widens with All', function () use ($trigger): void {
+    $this->createOrder('OR-1005', '565656');
+    $this->createCustomer('Chip Customer', null, '565656');
+    $this->indexAll();
+
+    $chips = 'document.querySelectorAll(".fi-record-palette-chip")';
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->assertScript($chips.'.length', 3)
+        ->assertScript(PALETTE_OPTIONS.'.length', 0)
+        ->assertScript('document.querySelector(".fi-record-palette-chip.fi-active").textContent.trim()', trans('filament-model-search::record-palette.all'));
+
+    $page->type(PALETTE_INPUT, '565656')->assertScript('document.querySelectorAll("[data-palette-result]").length', 2);
+    $page->script($chips.'[2].click()');
+    $page->assertScript('document.querySelectorAll("[data-palette-result]").length', 1)
+        ->assertScript('document.querySelector(".fi-record-palette-chip.fi-active").textContent.trim()', Str::ucfirst(CustomerResource::getPluralModelLabel()));
+    $page->script($chips.'[0].click()');
+    $page->assertScript('document.querySelectorAll("[data-palette-result]").length', 2);
 });

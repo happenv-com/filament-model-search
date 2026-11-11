@@ -41,8 +41,8 @@ use Throwable;
  *
  * @phpstan-type PaletteDetail array{label: string, value: string}
  * @phpstan-type PaletteItem array{id: string, title: string, url: string, exact: bool, hint: array{label: string, value: string}|null, details: list<PaletteDetail>, image: string|null, relatedTerm: string|null}
- * @phpstan-type PaletteGroup array{type: string, label: string, icon: string|null, items: list<PaletteItem>}
- * @phpstan-type PaletteWelcomeEntry array{type: string, label: string, icon: string|null, current: bool}
+ * @phpstan-type PaletteGroup array{type: string, label: string, pluralLabel: string, icon: string|null, items: list<PaletteItem>, more: bool}
+ * @phpstan-type PaletteChip array{type: string, label: string, icon: string|null, current: bool}
  * @phpstan-type PaletteFound array{groups: list<PaletteGroup>, outcome: string|null, stage: bool, timedOut: bool, indexBuilding: bool, total: int, capacity: int}
  */
 #[Isolate]
@@ -225,14 +225,17 @@ final class RecordPalette extends Component
         $identifierShaped = PhraseKind::isIdentifierShaped($phrase);
 
         // Asked once per render, for the list and for the label alike.
-        $choices = $isShort || $this->scope !== null ? $this->scopeChoices() : [];
+        $choices = $this->scopeChoices();
         $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $choices);
+        $listUrl = $scoped instanceof ResourceBinding && $found['groups'] !== [] ? $scoped->listUrl($phrase) : null;
 
         return view('filament-model-search::livewire.record-palette', [
             'groups' => $found['groups'],
             'rows' => $this->rowsOf($found['groups']),
-            'welcome' => $isShort ? $this->welcome($choices) : [],
-            'scopeLabel' => $scoped instanceof ResourceBinding ? Str::ucfirst($scoped->label()) : null,
+            'chips' => count($choices) >= 2 ? $this->chips($choices) : [],
+            'listUrl' => $listUrl,
+            'listLabel' => $scoped instanceof ResourceBinding ? $scoped->label() : null,
+            'phraseShown' => $phrase,
             'outcome' => $outcome,
             'offersEveryStage' => $found['stage'] && ! $this->everyStage && ! $this->similar,
             'offersSimilar' => $this->offersSimilar(),
@@ -303,12 +306,12 @@ final class RecordPalette extends Component
     }
 
     /**
-     * What the search can be narrowed to, shown before anything is typed.
+     * What the search can be narrowed to, in the order of the navigation: the chips under the field.
      *
-     * @param  list<ResourceBinding>  $bindings  The current choices of "Search in".
-     * @return list<PaletteWelcomeEntry>
+     * @param  list<ResourceBinding>  $bindings  The current choices of the narrowing.
+     * @return list<PaletteChip>
      */
-    private function welcome(array $bindings): array
+    private function chips(array $bindings): array
     {
         usort($bindings, static fn (ResourceBinding $a, ResourceBinding $b): int => $a->sort() <=> $b->sort());
 
@@ -376,7 +379,8 @@ final class RecordPalette extends Component
 
         // Asked now, never remembered: the user may have changed since the palette was opened. A resource that can
         // no longer narrow the search (the user may not open it, or it left "Search in") widens it to every resource.
-        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $this->scopeChoices());
+        $choices = $this->scopeChoices();
+        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $choices);
 
         if (! $scoped instanceof ResourceBinding) {
             $this->scope = null;
@@ -398,7 +402,9 @@ final class RecordPalette extends Component
             : max(1, $this->configInt('palette.per_scope', 20));
 
         try {
-            $answers = $this->answers($bindings, $phrase, $perGroup);
+            // One more than is shown, to know whether a group has more to show.
+            // One more than is shown, to know whether a group has more to show.
+            $answers = $this->answers($bindings, $phrase, $perGroup + 1);
         } catch (Throwable $exception) {
             $outcome = SearchOutcome::fromException($exception);
 
@@ -411,7 +417,7 @@ final class RecordPalette extends Component
             return;
         }
 
-        $this->found = $this->present($bindings, $answers, $perGroup);
+        $this->found = $this->present($bindings, $answers, $perGroup, $choices);
     }
 
     /**
@@ -450,9 +456,10 @@ final class RecordPalette extends Component
     /**
      * @param  list<ResourceBinding>  $bindings
      * @param  array<string, SearchResults>  $answers
+     * @param  list<ResourceBinding>  $choices  What the search can be narrowed to, which decides who offers "show all".
      * @return PaletteFound
      */
-    private function present(array $bindings, array $answers, int $perGroup): array
+    private function present(array $bindings, array $answers, int $perGroup, array $choices): array
     {
         $groups = [];
         $stage = false;
@@ -472,7 +479,7 @@ final class RecordPalette extends Component
             $timedOut = $timedOut || $results->timedOut;
             $indexBuilding = $indexBuilding || $results->indexBuilding;
 
-            $group = $this->group($binding, $results);
+            $group = $this->group($binding, $results, $perGroup, $this->scope === null && $this->scopeChoice($this->alias($binding), $choices) instanceof ResourceBinding);
 
             if ($group['items'] !== []) {
                 $total += count($group['items']);
@@ -503,14 +510,19 @@ final class RecordPalette extends Component
     /**
      * @return PaletteGroup
      */
-    private function group(ResourceBinding $binding, SearchResults $results): array
+    private function group(ResourceBinding $binding, SearchResults $results, int $perGroup, bool $canNarrow): array
     {
         $items = [];
+
+        // One more was asked for than is shown: its presence is the whole answer to "is there more".
+        $hits = iterator_to_array($results, false);
+        $more = count($hits) > $perGroup;
+        $hits = array_slice($hits, 0, $perGroup);
 
         // What the details read, once for all records (the scope's own eager loads).
         $records = new EloquentCollection;
 
-        foreach ($results as $result) {
+        foreach ($hits as $result) {
             $records->push($result->model);
         }
 
@@ -525,7 +537,7 @@ final class RecordPalette extends Component
             $this->renderedRows[$this->alias($binding)] = $rows;
         }
 
-        foreach ($results as $result) {
+        foreach ($hits as $result) {
             $url = $binding->url($result->model);
 
             if (blank($url)) {
@@ -575,8 +587,10 @@ final class RecordPalette extends Component
         return [
             'type' => $this->alias($binding),
             'label' => Str::ucfirst($binding->label()),
+            'pluralLabel' => $binding->label(),
             'icon' => $this->iconName($icon),
             'items' => $items,
+            'more' => $more && $canNarrow,
         ];
     }
 
