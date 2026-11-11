@@ -17,11 +17,31 @@
                 })
                 fail(() => this.inFlight--)
             })
+            this.fitToViewport()
             // The palette is on the page only because it was just called: its loader opens it now that it can listen.
             this.$nextTick(() => window.dispatchEvent(new CustomEvent('filament-model-search-palette-ready')))
         },
         destroy() {
             this.unhook?.()
+            this.unfit?.()
+        },
+        // A phone keyboard covers the bottom of the layout viewport without resizing it (iOS): the palette sizes
+        // itself to the visual viewport, so its last results scroll inside it instead of hiding under the keyboard.
+        fitToViewport() {
+            const viewport = window.visualViewport
+            if (!viewport) return
+            const root = document.documentElement
+            const fit = () => {
+                root.style.setProperty('--fi-record-palette-viewport-height', `${viewport.height}px`)
+                root.style.setProperty('--fi-record-palette-viewport-top', `${viewport.offsetTop}px`)
+            }
+            fit()
+            viewport.addEventListener('resize', fit)
+            viewport.addEventListener('scroll', fit)
+            this.unfit = () => {
+                viewport.removeEventListener('resize', fit)
+                viewport.removeEventListener('scroll', fit)
+            }
         },
         options() {
             return Array.from(this.$root.querySelectorAll('[role=option]'))
@@ -193,12 +213,12 @@
                         wire:target="phrase, searchSimilar, searchEveryStage, searchRelated, scopeTo, clearScope"
                         class="fi-record-palette-clear"
                     >
+                        {{-- Clears the phrase; with nothing typed it closes the palette, the way Esc does (a phone has no Esc). --}}
                         <button
                             type="button"
-                            x-cloak
-                            x-show="$wire.phrase !== ''"
-                            x-on:click="clearPhrase()"
-                            aria-label="{{ __('filament-model-search::record-palette.clear') }}"
+                            x-on:click="$wire.phrase !== '' ? clearPhrase() : $dispatch('close-modal', { id: @js(\Happenv\FilamentModelSearch\Livewire\RecordPalette::MODAL_ID) })"
+                            aria-label="{{ __('filament-model-search::record-palette.close') }}"
+                            x-bind:aria-label="$wire.phrase !== '' ? @js(__('filament-model-search::record-palette.clear')) : @js(__('filament-model-search::record-palette.close'))"
                             class="fi-record-palette-icon-button"
                         >
                             <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::XMark" />
@@ -360,7 +380,8 @@
                 @endif
 
                 @if ($groups !== [] && ($offersEveryStage || $offersSimilar))
-                    <div class="fi-record-palette-more">
+                    {{-- One short line under the results on a wide screen; ordinary rows at the end on a narrow one. --}}
+                    <div class="fi-record-palette-more fi-record-palette-widen">
                         @if ($offersEveryStage)
                             <button
                                 type="button"

@@ -275,3 +275,49 @@ it('starts the text of a row slot where the title starts, for a plain column and
     expect($page->script($left('.fi-record-palette-row-below')))->toBe($title)
         ->and($page->script($left('.fi-record-palette-row-above')))->toBe($title);
 });
+
+it('closes the palette with the field button when nothing is typed, and clears the phrase when something is', function () use ($focused, $trigger): void {
+    $this->createOrder('OR-3101', '555311');
+    $this->indexAll();
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger())->assertScript($focused, true);
+
+    $page->assertScript('document.querySelector(".fi-record-palette-search-tail button").getAttribute("aria-label")', trans('filament-model-search::record-palette.close'))
+        ->type(PALETTE_INPUT, 'OR-310')->assertScript('document.querySelectorAll("[data-palette-result]").length', 1)
+        ->assertScript('document.querySelector(".fi-record-palette-search-tail button").getAttribute("aria-label")', trans('filament-model-search::record-palette.clear'))
+        ->click('.fi-record-palette-search-tail button')
+        ->assertScript('document.querySelector("'.PALETTE_INPUT.'").value', '')
+        ->assertScript(PALETTE_OPEN, true)
+        ->click('.fi-record-palette-search-tail button')
+        ->assertScript(PALETTE_OPEN, false);
+});
+
+it('fits above a phone keyboard: the window ends inside the visual viewport and the results scroll in it', function () use ($focused, $trigger): void {
+    config(['filament-model-search.palette.per_group' => 40]);
+    foreach (range(1, 30) as $i) {
+        $this->createOrder('OR-40'.$i, '55540'.$i);
+    }
+    $this->indexAll();
+
+    $page = visit('/admin/orders')->on()->mobile()->assertScript(PALETTE_READY, true);
+    $page->click($trigger())->assertScript($focused, true)
+        ->type(PALETTE_INPUT, 'OR-40')->assertScript('document.querySelectorAll("[data-palette-result]").length', 30);
+
+    // A keyboard does not resize the layout viewport on iOS, only the visual one: shrink that one, the way the keyboard does.
+    $page->script('(() => { Object.defineProperty(window.visualViewport, "height", { configurable: true, get: () => 320 }); window.visualViewport.dispatchEvent(new Event("resize")) })()');
+
+    $page->assertScript('(() => { const w = document.querySelector(".fi-modal-window").getBoundingClientRect(); return w.bottom <= 320 + 1 })()', true)
+        ->assertScript('(() => { const l = document.querySelector("[role=listbox]"); return l.scrollHeight > l.clientHeight && l.clientHeight > 0 })()', true)
+        ->assertScript('document.querySelector("'.PALETTE_INPUT.'").getBoundingClientRect().top >= 0', true);
+});
+
+it('puts "search all" and "search for similar" on one line on a wide screen', function () use ($trigger): void {
+    $this->createOrder('OR-3201', '555321');
+    $this->createOrder('OR-3202', '555322');
+    $this->indexAll();
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->type(PALETTE_INPUT, 'OR-320')->assertScript('document.querySelectorAll("[data-palette-result]").length', 2);
+
+    $page->assertScript('(() => { const o = [...document.querySelectorAll(".fi-record-palette-widen [role=option]")]; return o.length >= 1 && o.every((e) => Math.abs(e.getBoundingClientRect().top - o[0].getBoundingClientRect().top) < 2) && o.every((e) => e.getBoundingClientRect().height <= 32) })()', true);
+});

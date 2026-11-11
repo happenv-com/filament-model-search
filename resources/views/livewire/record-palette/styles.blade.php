@@ -9,23 +9,44 @@
             background-color: color-mix(in oklab, var(--gray-950) 45%, transparent);
         }
 
+        /* The space over the window, and the height the window may take: what the visual viewport leaves (see fitToViewport). */
+        --fi-record-palette-gap: clamp(0.75rem, 8vh, 5rem);
+
+        @media (max-width: 40rem) {
+            --fi-record-palette-gap: 0.75rem;
+        }
+
         & > .fi-modal-window-ctn {
-            grid-template-rows: clamp(0.75rem, 8vh, 5rem) auto 1fr;
+            grid-template-rows: var(--fi-record-palette-gap) auto 1fr;
             align-content: start;
+            /* The gap row is the only space over the window, so the height below can be counted from it. */
+            padding-block: 0;
+            translate: 0 var(--fi-record-palette-viewport-top, 0px);
         }
 
         & > .fi-modal-window-ctn > .fi-modal-window {
+            display: flex;
+            flex-direction: column;
+            max-height: calc(var(--fi-record-palette-viewport-height, 100dvh) - var(--fi-record-palette-gap) - 0.75rem);
             overflow: hidden;
             border-radius: 0.75rem;
         }
 
         & .fi-modal-content {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-height: 0;
             padding: 0;
             gap: 0;
         }
     }
 
     .fi-record-palette {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: 0;
         color: var(--gray-700);
         font-size: 0.875rem;
         line-height: 1.25rem;
@@ -70,6 +91,11 @@
         gap: 1rem;
         height: 3rem;
         padding: 0 1rem;
+
+        /* A finger, not a pointer: a taller field on a phone, with room around the 16px text that keeps iOS from zooming. */
+        @media (max-width: 40rem) {
+            height: 3.5rem;
+        }
     }
 
     .fi-record-palette-search-icon {
@@ -268,9 +294,16 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         gap: 1rem;
+        flex: 0 1 auto;
+        min-height: 0;
         max-height: min(55vh, 27.5rem);
         max-height: min(55dvh, 27.5rem);
         padding: 1rem 1rem 0.5rem;
+
+        /* On a phone the window's own height bounds the list, which then scrolls inside it. */
+        @media (max-width: 40rem) {
+            max-height: none;
+        }
         overflow-y: auto;
         overscroll-behavior: contain;
 
@@ -302,6 +335,40 @@
 
         &:where(.dark *) {
             border-top-color: color-mix(in oklab, var(--gray-500) 20%, transparent);
+        }
+    }
+
+    /* The options that widen the search: one short line on a wide screen, rows on a narrow one. */
+    @media (min-width: 40rem) {
+        .fi-record-palette-widen {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.25rem 0.5rem;
+
+            & .fi-record-palette-row {
+                width: auto;
+                min-height: 0;
+                gap: 0.375rem;
+                padding: 0.25rem 0.5rem;
+                font-size: 0.8125rem;
+            }
+
+            & .fi-record-palette-row-icon {
+                width: 1rem;
+                height: 1rem;
+                margin: 0;
+            }
+
+            & .fi-record-palette-row-main {
+                display: flex;
+                align-items: baseline;
+                gap: 0.5rem;
+            }
+
+            & .fi-record-palette-row-details {
+                display: inline !important;
+            }
         }
     }
 
@@ -467,15 +534,31 @@
         }
     }
 
+    /*
+     * On a narrow screen the end of the row moves under the title, into the title's own column: a grid of the leading
+     * part (when there is one) and one column for everything else, so the moved lines start exactly where the title does.
+     */
     .fi-record-palette-row-slotted {
         @media (max-width: 48rem) {
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            align-items: start;
             row-gap: 0.125rem;
-        }
 
-        &:has(> .fi-record-palette-row-leading, > .fi-record-palette-row-icon, > .fi-record-palette-row-image) > .fi-record-palette-row-trailing {
-            @media (max-width: 48rem) {
-                padding-inline-start: 2.75rem;
+            &:has(> .fi-record-palette-row-leading, > .fi-record-palette-row-icon, > .fi-record-palette-row-image) {
+                grid-template-columns: auto minmax(0, 1fr);
+            }
+
+            & > .fi-record-palette-row-leading,
+            & > .fi-record-palette-row-icon,
+            & > .fi-record-palette-row-image {
+                grid-row: 1 / span 3;
+            }
+
+            & > .fi-record-palette-row-main,
+            & > .fi-record-palette-row-trailing,
+            & > .fi-record-palette-row-hint {
+                grid-column: -2;
             }
         }
     }
