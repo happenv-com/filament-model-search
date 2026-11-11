@@ -114,7 +114,7 @@ final class RecordPalette extends Component
             return;
         }
 
-        if (! $this->scopeChoice($type) instanceof ResourceBinding) {
+        if (! $this->scopeChoice($type, $this->scopeChoices()) instanceof ResourceBinding) {
             return;
         }
 
@@ -218,11 +218,13 @@ final class RecordPalette extends Component
         $offersWiden = $this->offersWiden();
         $identifierShaped = PhraseKind::isIdentifierShaped($phrase);
 
-        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope);
+        // Asked once per render, for the list and for the label alike.
+        $choices = $isShort || $this->scope !== null ? $this->scopeChoices() : [];
+        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $choices);
 
         return view('filament-model-search::livewire.record-palette', [
             'groups' => $found['groups'],
-            'welcome' => $isShort ? $this->welcome() : [],
+            'welcome' => $isShort ? $this->welcome($choices) : [],
             'scopeLabel' => $scoped instanceof ResourceBinding ? Str::ucfirst($scoped->label()) : null,
             'outcome' => $outcome,
             'offersEveryStage' => $found['stage'] && ! $this->everyStage && ! $this->similar,
@@ -294,14 +296,13 @@ final class RecordPalette extends Component
     }
 
     /**
-     * What the search can be narrowed to, shown before anything is typed. Asked now: the user changes.
+     * What the search can be narrowed to, shown before anything is typed.
      *
+     * @param  list<ResourceBinding>  $bindings  The current choices of "Search in".
      * @return list<PaletteWelcomeEntry>
      */
-    private function welcome(): array
+    private function welcome(array $bindings): array
     {
-        $bindings = $this->scopeChoices();
-
         usort($bindings, static fn (ResourceBinding $a, ResourceBinding $b): int => $a->sort() <=> $b->sort());
 
         return array_map(fn (ResourceBinding $binding): array => [
@@ -338,9 +339,14 @@ final class RecordPalette extends Component
         ));
     }
 
-    private function scopeChoice(string $type): ?ResourceBinding
+    /**
+     * The one place that says whether a type may narrow the search right now.
+     *
+     * @param  list<ResourceBinding>  $choices  The current choices of "Search in".
+     */
+    private function scopeChoice(string $type, array $choices): ?ResourceBinding
     {
-        foreach ($this->scopeChoices() as $binding) {
+        foreach ($choices as $binding) {
             if ($this->alias($binding) === $type) {
                 return $binding;
             }
@@ -359,18 +365,18 @@ final class RecordPalette extends Component
             return;
         }
 
-        // Asked now, never remembered: the user may have changed since the palette was opened.
-        $bindings = array_values(array_filter(
+        // Asked now, never remembered: the user may have changed since the palette was opened. A resource that can
+        // no longer narrow the search (the user may not open it, or it left "Search in") widens it to every resource.
+        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $this->scopeChoices());
+
+        if (! $scoped instanceof ResourceBinding) {
+            $this->scope = null;
+        }
+
+        $bindings = $scoped instanceof ResourceBinding ? [$scoped] : array_values(array_filter(
             resolve(ResourceBindings::class)->all(),
             static fn (ResourceBinding $binding): bool => $binding->isAccessible(),
         ));
-
-        // A resource the user may no longer open, or no longer offered, cannot narrow anything: the search widens to every resource.
-        if ($this->scope !== null) {
-            $scoped = array_values(array_filter($bindings, fn (ResourceBinding $binding): bool => $binding->offersScope() && $this->alias($binding) === $this->scope));
-            $this->scope = $scoped === [] ? null : $this->scope;
-            $bindings = $scoped === [] ? $bindings : $scoped;
-        }
 
         if ($bindings === []) {
             $this->found = [...$this->nothing(), 'outcome' => SearchOutcome::Unavailable->value];
