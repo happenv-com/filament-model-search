@@ -11,6 +11,7 @@ return [
     'search_every_stage' => 'Search all',
     'search_similar' => 'Search for similar',
     'stage_note' => 'Showing only records in progress.',
+    'stage_shown' => 'Showing: :stage',
     'similar_note' => 'Showing names similar to what you typed.',
     'timed_out_notice' => 'Part of the search took too long, so some records may be missing.',
     'index_building_notice' => 'The search index is being built — results may be incomplete.',

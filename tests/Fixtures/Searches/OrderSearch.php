@@ -31,7 +31,7 @@ final class OrderSearch extends ModelSearch
             SearchStage::make('open', static fn (Builder $query): Builder => $query->where('state', 'unshipped'))
                 ->watching(['state'])
                 ->label(static fn (): string => 'Open orders'),
-            SearchStage::all(),
+            SearchStage::all()->label(static fn (): string => 'All orders'),
         ];
     }
 

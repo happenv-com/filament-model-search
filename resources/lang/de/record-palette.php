@@ -11,6 +11,7 @@ return [
     'search_every_stage' => 'In allen suchen',
     'search_similar' => 'Ähnliche suchen',
     'stage_note' => 'Es werden nur laufende Datensätze angezeigt.',
+    'stage_shown' => 'Angezeigt: :stage',
     'similar_note' => 'Angezeigt werden Namen, die dem Eingegebenen ähneln.',
     'timed_out_notice' => 'Ein Teil der Suche hat zu lange gedauert, daher fehlen möglicherweise Datensätze.',
     'index_building_notice' => 'Der Suchindex wird aufgebaut — die Ergebnisse können unvollständig sein.',

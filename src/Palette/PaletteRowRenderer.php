@@ -47,11 +47,11 @@ final class PaletteRowRenderer
     {
         // One set of components for the whole group, handed each record in turn the way a table hands them its rows.
         $slots = [
-            'leading' => array_values($this->row->leading()),
-            'aboveTitle' => array_values($this->row->aboveTitle()),
-            'besideTitle' => array_values($this->row->besideTitle()),
-            'belowTitle' => array_values($this->row->belowTitle()),
-            'trailing' => array_values($this->row->trailing()),
+            'leading' => $this->row->getLeading(),
+            'aboveTitle' => $this->row->getAboveTitle(),
+            'besideTitle' => $this->row->getBesideTitle(),
+            'belowTitle' => $this->row->getBelowTitle(),
+            'trailing' => $this->row->getTrailing(),
         ];
         $table = $this->table();
 

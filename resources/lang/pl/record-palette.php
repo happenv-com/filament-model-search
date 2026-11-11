@@ -11,6 +11,7 @@ return [
     'search_every_stage' => 'Szukaj we wszystkich',
     'search_similar' => 'Szukaj podobnych',
     'stage_note' => 'Teraz widzisz tylko rekordy w toku.',
+    'stage_shown' => 'Pokazuję: :stage',
     'similar_note' => 'Pokazano nazwy podobne do wpisanej frazy.',
     'timed_out_notice' => 'Część wyszukiwania trwała zbyt długo, więc mogło zabraknąć niektórych rekordów.',
     'index_building_notice' => 'Indeks wyszukiwania jest w budowie — wyniki mogą być niepełne.',

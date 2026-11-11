@@ -21,6 +21,7 @@ use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Happenv\ModelSearch\Definition\Mode;
 use Happenv\ModelSearch\Definition\ModelSearch;
 use Happenv\ModelSearch\Definition\SearchStage;
+use Happenv\ModelSearch\Facades\ModelSearches;
 use Happenv\ModelSearch\Query\SearchQuery;
 use Happenv\ModelSearch\Query\SearchResults;
 use Illuminate\Contracts\Support\Htmlable;
@@ -45,7 +46,7 @@ use Throwable;
  * @phpstan-type PaletteGroup array{type: string, label: string, pluralLabel: string, icon: string|null, items: list<PaletteItem>, more: bool}
  * @phpstan-type RecentItem array{type: string, id: string, title: string, url: string, details: list<PaletteDetail>, image: string|null, icon: string|null}
  * @phpstan-type PaletteChip array{type: string, label: string, icon: string|null, current: bool}
- * @phpstan-type PaletteFound array{groups: list<PaletteGroup>, outcome: string|null, stage: bool, timedOut: bool, indexBuilding: bool, total: int, capacity: int}
+ * @phpstan-type PaletteFound array{groups: list<PaletteGroup>, outcome: string|null, stage: bool, stagedBy: array{model: class-string<Model>, stage: string}|null, timedOut: bool, indexBuilding: bool, total: int, capacity: int}
  */
 #[Isolate]
 final class RecordPalette extends Component
@@ -79,6 +80,7 @@ final class RecordPalette extends Component
         'groups' => [],
         'outcome' => null,
         'stage' => false,
+        'stagedBy' => null,
         'timedOut' => false,
         'indexBuilding' => false,
         'total' => 0,
@@ -256,6 +258,7 @@ final class RecordPalette extends Component
             'phraseShown' => $phrase,
             'outcome' => $outcome,
             'offersEveryStage' => $found['stage'] && ! $this->everyStage && ! $this->similar,
+            ...$this->stageLabels($found['stagedBy']),
             'offersSimilar' => $this->offersSimilar(),
             'offersWiden' => $offersWiden,
             'emptyHeading' => $this->emptyHeading($outcome),
@@ -268,6 +271,45 @@ final class RecordPalette extends Component
             'placeholder' => $this->placeholder(),
             'debounce' => max(0, $this->configInt('palette.debounce_ms', 250)),
         ]);
+    }
+
+    /**
+     * What the line under the results says about stages: which one is shown, and the button that searches them all.
+     * Both are the definition's own labels when the one type that answered from a stage has them, resolved now in
+     * the viewer's locale; otherwise the generic sentence and button, which fit any number of types.
+     *
+     * @param  array{model: class-string<Model>, stage: string}|null  $stagedBy
+     * @return array{stageShown: string, everyStageLabel: string}
+     */
+    private function stageLabels(?array $stagedBy): array
+    {
+        $shown = null;
+        $every = null;
+
+        if ($stagedBy !== null && in_array($stagedBy['model'], ModelSearches::models(), true)) {
+            foreach (ModelSearches::for($stagedBy['model'])->stages as $stage) {
+                $label = $stage->labelResolver();
+
+                if ($label === null) {
+                    continue;
+                }
+
+                if ($stage->key === $stagedBy['stage']) {
+                    $shown = $label();
+                } elseif ($stage->isAll()) {
+                    $every = $label();
+                }
+            }
+        }
+
+        return [
+            'stageShown' => $shown === null || $shown === ''
+                ? trans('filament-model-search::record-palette.stage_note')
+                : trans('filament-model-search::record-palette.stage_shown', ['stage' => $shown]),
+            'everyStageLabel' => $every === null || $every === ''
+                ? trans('filament-model-search::record-palette.search_every_stage')
+                : $every,
+        ];
     }
 
     /**
@@ -487,6 +529,7 @@ final class RecordPalette extends Component
     {
         $groups = [];
         $stage = false;
+        $staged = [];
         $timedOut = false;
         $indexBuilding = false;
         $total = 0;
@@ -499,7 +542,11 @@ final class RecordPalette extends Component
             }
 
             // Only a type that answered from its first stage has anything left to show: `all` has searched everything.
-            $stage = $stage || ($results->stage !== null && $results->stage !== SearchStage::ALL);
+            if ($results->stage !== null && $results->stage !== SearchStage::ALL) {
+                $stage = true;
+                $staged[] = ['model' => $binding->modelClass(), 'stage' => $results->stage];
+            }
+
             $timedOut = $timedOut || $results->timedOut;
             $indexBuilding = $indexBuilding || $results->indexBuilding;
 
@@ -524,6 +571,8 @@ final class RecordPalette extends Component
             'groups' => array_map(static fn (array $entry): array => $entry['group'], $groups),
             'outcome' => $outcome->value,
             'stage' => $stage,
+            // The stage is named only when one type answered from it: two named stages make no one sentence.
+            'stagedBy' => count($staged) === 1 ? $staged[0] : null,
             'timedOut' => $timedOut,
             'indexBuilding' => $indexBuilding,
             'total' => $total,
@@ -556,7 +605,7 @@ final class RecordPalette extends Component
         $rows = [];
 
         if ($row instanceof SearchResultRow) {
-            $records->loadMissing($row->with());
+            $records->loadMissing($row->getWith());
             $rows = new PaletteRowRenderer($binding->resourceClass(), $row)->render($records);
             $this->renderedRows[$this->alias($binding)] = $rows;
         }
@@ -801,6 +850,7 @@ final class RecordPalette extends Component
             'groups' => [],
             'outcome' => null,
             'stage' => false,
+            'stagedBy' => null,
             'timedOut' => false,
             'indexBuilding' => false,
             'total' => 0,
