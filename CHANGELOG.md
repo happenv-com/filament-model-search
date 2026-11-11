@@ -2,6 +2,41 @@
 
 All notable changes to `filament-model-search` will be documented in this file.
 
+## v0.5.0 - 2026-11-11
+
+### Breaking: a row is described on a builder
+
+A resource no longer names a `SearchResultRow` subclass. It gets a `SearchResultRow` builder and returns it, the way `table(Table $table)` describes a table:
+
+```php
+public static function globalSearchResultRow(SearchResultRow $row): SearchResultRow
+{
+    return $row
+        ->with(['channel'])
+        ->besideTitle([TextColumn::make('state')->badge()])
+        ->belowTitle([TextColumn::make('customer_name')])
+        ->trailing(fn (SearchResultRow $row): array => [TextColumn::make('placed_at')->date()]);
+}
+
+```
+- Every slot (`leading`, `aboveTitle`, `besideTitle`, `belowTitle`, `trailing`) takes table columns or `Split` / `Stack` layouts, or a closure returning them that gets the row as `$row` (by name or by type).
+- `with()` takes the relations to eager load once per group. It only eager loads: the records are the ones the search found and the user may open, and nothing here can filter them away.
+- The method is called through the container, so it may ask for more than the row.
+- A row returned untouched is the default look. A slot that holds something else than columns throws a `LogicException` naming the slot.
+
+#### Upgrading from 0.4
+
+1. Replace `public static function getGlobalSearchResultRow(): ?string` with `public static function globalSearchResultRow(SearchResultRow $row): SearchResultRow`. A resource that still declares the old method throws a `LogicException` pointing at the new one.
+2. Turn the row class into calls on the builder: `with(): array` → `->with([...])`, `besideTitle(): array` → `->besideTitle([...])`, and so on. To keep the description in its own class, make it a `configure(SearchResultRow $row): SearchResultRow` helper and call it from the resource.
+
+### Record palette
+
+- **The stage line names the stage.** When the results came from a stage, the line under them says which one ("Showing: Open orders") and the button that searches every stage carries the label of `SearchStage::all()` ("All orders"). Both come from the definition's `label()` closures, resolved in the viewer's locale. Without a label, or when several types answered from their own stages, the line falls back to "Showing only records in progress." and "Search all". "Search for similar" stays a separate button on the same line. Labels are not part of the definition's fingerprint: adding one needs no `version()` bump and no reindex.
+
+### Translations
+
+- New key `record-palette.stage_shown` (`Showing: :stage`) in en, pl and de.
+
 ## v0.4.1 - 2026-11-11
 
 ### What's Changed
