@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Happenv\FilamentModelSearch\History\PaletteHistory;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 covers(PaletteHistory::class);
 
@@ -100,4 +101,32 @@ it('reads and writes nothing when it is switched off or nobody is signed in', fu
 
     expect($this->history->recent(null))->toBe([])
         ->and(DB::table('model_search_palette_history')->pluck('record_key')->all())->toBe(['a']);
+});
+
+it('keeps the order of records opened within the same second', function (): void {
+    $user = $this->signIn();
+
+    $this->history->record($user, 'order', 'a');
+    $this->history->record($user, 'order', 'b');
+    $this->history->record($user, 'order', 'a');
+
+    expect($this->history->recent($user))->toBe([['type' => 'order', 'key' => 'a'], ['type' => 'order', 'key' => 'b']]);
+});
+
+it('holds a uuid, a ulid and a bigint key and keeps the unique index short enough for MySQL', function (): void {
+    $user = $this->signIn();
+    $keys = ['01a1caba-3c38-7318-b1c4-661febc0cf39', '01ARZ3NDEKTSV4RRFFQ69G5FAV', '9223372036854775807'];
+
+    foreach ($keys as $key) {
+        $this->history->record($user, 'order', $key);
+    }
+
+    $lengths = collect(Schema::getColumns('model_search_palette_history'))
+        ->filter(static fn (array $column): bool => in_array($column['name'], ['user_type', 'user_id', 'record_type', 'record_key'], true))
+        ->map(static fn (array $column): int => (int) preg_replace('/\D/', '', (string) $column['type']))
+        ->sum();
+
+    expect(array_column($this->history->recent($user), 'key'))->toEqualCanonicalizing($keys)
+        // The characters of the unique index, at four bytes each, must stay under InnoDB's 3072 bytes.
+        ->and($lengths * 4)->toBeLessThan(3072);
 });

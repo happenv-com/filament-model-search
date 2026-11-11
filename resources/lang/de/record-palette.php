@@ -23,7 +23,7 @@ return [
     'all' => 'Alle',
     'scope_label' => 'Suchen in',
     'show_all' => 'Alle anzeigen: :label',
-    'open_list' => 'Liste „:label“ mit „:phrase“ öffnen',
+    'open_list_with_phrase' => 'Liste „:label“ mit „:phrase“ öffnen',
     'open_list_enter' => 'Liste öffnen',
     'recently_opened' => 'Zuletzt geöffnet',
     'clear_history' => 'Verlauf löschen',

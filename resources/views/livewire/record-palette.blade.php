@@ -164,7 +164,7 @@
                     aria-autocomplete="list"
                     aria-haspopup="listbox"
                     aria-controls="filament-model-search-palette-results"
-                    aria-expanded="{{ $groups !== [] ? 'true' : 'false' }}"
+                    aria-expanded="{{ $groups !== [] || $recentItems !== [] ? 'true' : 'false' }}"
                     x-bind:aria-activedescendant="activeId"
                     x-on:input="activeId = null; typedAt = Date.now()"
                     x-on:keydown.arrow-down="move($event, 1)"
@@ -353,7 +353,7 @@
                             <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::ArrowRight" class="fi-record-palette-row-icon" />
 
                             <span class="fi-record-palette-row-main">
-                                <span class="fi-record-palette-row-title" style="display: block">{{ __('filament-model-search::record-palette.open_list', ['label' => $listLabel, 'phrase' => $phraseShown]) }}</span>
+                                <span class="fi-record-palette-row-title" style="display: block">{{ __('filament-model-search::record-palette.open_list_with_phrase', ['label' => $listLabel, 'phrase' => $phraseShown]) }}</span>
                             </span>
                         </a>
                     </div>

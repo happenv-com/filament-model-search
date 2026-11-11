@@ -27,7 +27,8 @@ final class PaletteHistory
         }
 
         $owner = $this->owner($user);
-        $now = now();
+        // The column keeps microseconds; the query builder would format the date without them.
+        $now = now()->format('Y-m-d H:i:s.u');
 
         DB::transaction(function () use ($owner, $type, $key, $now): void {
             $updated = $this->table()
@@ -45,18 +46,16 @@ final class PaletteHistory
     }
 
     /**
-     * The newest entries of the user, newest first: all that are kept unless a limit is given. The caller skips the
-     * ones it can no longer show (deleted, no longer allowed) and shows `palette.history.limit` of the rest.
+     * Every entry kept for the user, newest first. The caller skips the ones it can no longer show (deleted, no
+     * longer allowed) and shows `palette.history.limit` of the rest.
      *
      * @return list<array{type: string, key: string}>
      */
-    public function recent(?Authenticatable $user, ?int $limit = null): array
+    public function recent(?Authenticatable $user): array
     {
         if (! $user instanceof Authenticatable || ! $this->enabled()) {
             return [];
         }
-
-        $limit ??= $this->keep();
 
         $entries = [];
 
@@ -64,7 +63,7 @@ final class PaletteHistory
             ->where($this->owner($user))
             ->orderByDesc('opened_at')
             ->orderByDesc('id')
-            ->limit($limit)
+            ->limit($this->keep())
             ->get(['record_type', 'record_key']);
 
         foreach ($rows as $row) {
@@ -87,7 +86,8 @@ final class PaletteHistory
     }
 
     /**
-     * Whether history is kept: switched on, and the table exists.
+     * Whether history is kept: `palette.history.enabled`. The table must exist (the package's migration, unless the
+     * host runs its own): it is not checked here.
      */
     public function enabled(): bool
     {

@@ -23,7 +23,7 @@ return [
     'all' => 'Wszystko',
     'scope_label' => 'Szukaj w',
     'show_all' => 'Pokaż wszystkie: :label',
-    'open_list' => 'Otwórz listę: :label z frazą „:phrase”',
+    'open_list_with_phrase' => 'Otwórz listę: :label z frazą „:phrase”',
     'open_list_enter' => 'Otwórz listę',
     'recently_opened' => 'Ostatnio otwierane',
     'clear_history' => 'Wyczyść historię',

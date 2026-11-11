@@ -62,19 +62,10 @@ final class RecordPalette extends Component
     /**
      * The morph alias of the one resource the search is narrowed to, or null for every resource. Set only
      * through `scopeTo()`, and asked again on every search: a resource the user may no longer open, or that is
-     * no longer offered under "Search in", widens it.
+     * no longer offered as a choice of the chips, widens it.
      */
     #[Locked]
     public ?string $scope = null;
-
-    /**
-     * What "Recently opened" shows right now: the pairs `open()` accepts besides the results. Filled while the field
-     * is empty, from the history of the current user, and emptied once a phrase is typed.
-     *
-     * @var list<array{type: string, id: string}>
-     */
-    #[Locked]
-    public array $recent = [];
 
     #[Locked]
     public bool $everyStage = false;
@@ -126,7 +117,7 @@ final class RecordPalette extends Component
     }
 
     /**
-     * Narrows the search to one resource of "Search in", or back to every resource when it is the one already
+     * Narrows the search to one resource of the chips, or back to every resource when it is the one already
      * chosen. Only a resource listed there is accepted: one the user may open and search, and that is offered.
      */
     public function scopeTo(string $type): void
@@ -201,14 +192,12 @@ final class RecordPalette extends Component
     }
 
     /**
-     * Opens a record of the current results, when the user may still open it.
+     * Opens a record when the user may open it now: a resource that is bound and accessible, and a record inside its
+     * scope. The record need not be among the current results, so a click never does nothing because the results
+     * moved on meanwhile; the scope and the resource's own access are what is enforced.
      */
     public function open(string $type, string $id): void
     {
-        if (! $this->isFound($type, $id)) {
-            return;
-        }
-
         $binding = $this->bindingOfType($type);
 
         if (! $binding instanceof ResourceBinding || ! $binding->isAccessible()) {
@@ -233,7 +222,6 @@ final class RecordPalette extends Component
     {
         resolve(PaletteHistory::class)->clear(Filament::auth()->user());
 
-        $this->recent = [];
     }
 
     public function render(): View
@@ -253,7 +241,6 @@ final class RecordPalette extends Component
         $listUrl = $scoped instanceof ResourceBinding && $found['groups'] !== [] ? $scoped->listUrl($phrase) : null;
 
         $recent = $isShort ? $this->recentOpened() : ['items' => [], 'rows' => []];
-        $this->recent = array_map(static fn (array $item): array => ['type' => $item['type'], 'id' => $item['id']], $recent['items']);
 
         return view('filament-model-search::livewire.record-palette', [
             'recentItems' => $recent['items'],
@@ -363,7 +350,7 @@ final class RecordPalette extends Component
     }
 
     /**
-     * The resources of "Search in": offered there, the user may open them now and they have a search of their own.
+     * The resources of the chips: offered there, the user may open them now and they have a search of their own.
      *
      * @return list<ResourceBinding>
      */
@@ -380,7 +367,7 @@ final class RecordPalette extends Component
     /**
      * The one place that says whether a type may narrow the search right now.
      *
-     * @param  list<ResourceBinding>  $choices  The current choices of "Search in".
+     * @param  list<ResourceBinding>  $choices  The current choices of the chips.
      */
     private function scopeChoice(string $type, array $choices): ?ResourceBinding
     {
@@ -406,7 +393,7 @@ final class RecordPalette extends Component
         }
 
         // Asked now, never remembered: the user may have changed since the palette was opened. A resource that can
-        // no longer narrow the search (the user may not open it, or it left "Search in") widens it to every resource.
+        // no longer narrow the search (the user may not open it, or it left the chips) widens it to every resource.
         $choices = $this->scopeChoices();
         $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $choices);
 
@@ -430,7 +417,6 @@ final class RecordPalette extends Component
             : max(1, $this->configInt('palette.per_scope', 20));
 
         try {
-            // One more than is shown, to know whether a group has more to show.
             // One more than is shown, to know whether a group has more to show.
             $answers = $this->answers($bindings, $phrase, $perGroup + 1);
         } catch (Throwable $exception) {
@@ -771,27 +757,6 @@ final class RecordPalette extends Component
         }
 
         return null;
-    }
-
-    private function isFound(string $type, string $id): bool
-    {
-        if (in_array(['type' => $type, 'id' => $id], $this->recent, true)) {
-            return true;
-        }
-
-        foreach ($this->found['groups'] as $group) {
-            if ($group['type'] !== $type) {
-                continue;
-            }
-
-            foreach ($group['items'] as $item) {
-                if ($item['id'] === $id) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     private function bindingOfType(string $type): ?ResourceBinding

@@ -6,6 +6,7 @@ use Filament\Tables\Columns\TextColumn;
 use Happenv\FilamentModelSearch\History\PaletteHistory;
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -18,6 +19,7 @@ beforeEach(function (): void {
         'filament-model-search.palette.history.limit' => 5,
         'filament-model-search.palette.history.keep' => 20,
         'fixtures.order_row' => null,
+        'fixtures.customer_scope' => null,
     ]);
 });
 
@@ -138,17 +140,27 @@ it('skips a record that was deleted and one the user may no longer open', functi
     Livewire::test(RecordPalette::class)->assertDontSee('OR-LOCKED')->assertSee('Still Allowed');
 });
 
-it('accepts a history row to be opened, and nothing the history does not show', function () use ($openThrough): void {
+it('opens a history row', function () use ($openThrough): void {
     $this->signIn($this->allAbilities());
     $order = $this->createOrder('OR-O1', '770001');
-    $stranger = $this->createOrder('OR-O2', '770002');
     $this->indexAll();
     $openThrough($this, '770001', 'order', (string) $order->getKey());
 
-    $component = Livewire::test(RecordPalette::class)->assertSet('recent', [['type' => 'order', 'id' => (string) $order->getKey()]]);
+    Livewire::test(RecordPalette::class)->call('open', 'order', (string) $order->getKey())
+        ->assertRedirect(OrderResource::getUrl('view', ['record' => $order]));
+});
 
-    $component->call('open', 'order', (string) $order->getKey())->assertRedirect(OrderResource::getUrl('view', ['record' => $order]));
-    Livewire::test(RecordPalette::class)->call('open', 'order', (string) $stranger->getKey())->assertNoRedirect();
+it('skips a record that left the scope of its resource while the resource stays open to the user', function () use ($openThrough): void {
+    $this->signIn($this->allAbilities());
+    $kept = $this->createCustomer('Kept In Scope', null, '810001');
+    $left = $this->createCustomer('Left The Scope', null, '810002');
+    $this->indexAll();
+    $openThrough($this, '810001', 'customer', (string) $kept->getKey());
+    $openThrough($this, '810002', 'customer', (string) $left->getKey());
+
+    config(['fixtures.customer_scope' => static fn (Builder $query): Builder => $query->where('name', '!=', 'Left The Scope')]);
+
+    Livewire::test(RecordPalette::class)->assertSee('Kept In Scope')->assertDontSee('Left The Scope');
 });
 
 it('forgets everything with Clear history', function () use ($openThrough): void {
@@ -161,7 +173,7 @@ it('forgets everything with Clear history', function () use ($openThrough): void
         ->call('clearHistory')
         ->assertDontSee('OR-C1')
         ->assertDontSee(trans('filament-model-search::record-palette.recently_opened'))
-        ->assertSet('recent', []);
+        ->assertDontSee('OR-C1');
 
     expect(resolve(PaletteHistory::class)->recent(auth()->user()))->toBe([]);
 });

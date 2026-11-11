@@ -129,7 +129,7 @@ Return `null` (or leave the method out) for no picture or no magnifier. What a r
 - `config/filament-model-search.php` (`php artisan vendor:publish --tag=filament-model-search-config`): `palette.enabled`, `palette.trigger`, `palette.keybindings`, `palette.debounce_ms`, `palette.per_group`, `palette.per_scope`, `palette.history.*`, `palette.placeholder` (a translation key), `readiness_cache_seconds`.
 - `paletteTrigger()` overrides `palette.trigger`. The palette is offered only when both `palette()` and `palette.enabled` are on.
 - Texts live under `filament-model-search::` in `en`, `pl` and `de`; publish with `--tag=filament-model-search-translations`.
-- The next release replaces the `welcome_heading`, `scope` and `clear_scope` keys with `all`, `scope_label`, `show_all`, `open_list`, `open_list_enter`, `recently_opened` and `clear_history`.
+- v0.4.0 removed the `welcome_heading`, `scope` and `clear_scope` keys and added `all`, `scope_label`, `show_all`, `open_list_with_phrase`, `open_list_enter`, `recently_opened` and `clear_history`.
 - v0.3.0 added the `narrow`, `scope`, `clear_scope` and `search_term` keys and removed `open_list`: an app that published the translations before must republish them (or add the keys).
 
 ## Testing

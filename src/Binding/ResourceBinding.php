@@ -15,6 +15,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use LogicException;
 use Throwable;
@@ -105,10 +106,21 @@ final readonly class ResourceBinding
 
         $scope = $this->scope();
 
-        $records = $model->newQuery()
-            ->whereKey($keys)
-            ->whereIn($model->getQualifiedKeyName(), HostScope::of($scope)->select($model->getQualifiedKeyName()))
-            ->get();
+        try {
+            // In a transaction of its own (a savepoint inside another one), so a refused key leaves the caller's usable.
+            $records = $model->getConnection()->transaction(static fn () => $model->newQuery()
+                ->whereKey($keys)
+                ->whereIn($model->getQualifiedKeyName(), HostScope::of($scope)->select($model->getQualifiedKeyName()))
+                ->get());
+        } catch (QueryException $exception) {
+            // A key that is not of this model's key type (it came from the browser or from an old history row) is
+            // no record of this resource. Only a data exception (SQLSTATE class 22) is taken for that.
+            if (! str_starts_with((string) $exception->getCode(), '22')) {
+                throw $exception;
+            }
+
+            return $model->newCollection();
+        }
 
         $records->loadMissing($scope->getEagerLoads());
         $records->loadMissing($this->paletteRow()?->with() ?? []);
@@ -158,7 +170,7 @@ final readonly class ResourceBinding
     {
         $resource = $this->resourceClass;
 
-        if (! $this->isOnCurrentPanel() || ! $resource::hasPage('index') || ! $resource::canViewAny()) {
+        if (! $this->isAccessible() || ! $resource::hasPage('index')) {
             return null;
         }
 
@@ -203,7 +215,7 @@ final readonly class ResourceBinding
     }
 
     /**
-     * Whether the palette lists the resource under "Search in", so that the search can be narrowed to it: the
+     * Whether the palette offers the resource as a chip, so that the search can be narrowed to it: the
      * optional static `isOfferedAsPaletteScope(): bool` of the resource, offered without one. A resource left out
      * is still searched everywhere; it only cannot be chosen alone.
      */

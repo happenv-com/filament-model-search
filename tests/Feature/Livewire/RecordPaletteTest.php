@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Happenv\FilamentModelSearch\History\PaletteHistory;
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
 use Happenv\FilamentModelSearch\Support\SearchOutcome;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Customer;
@@ -163,7 +164,7 @@ it('enter opens nothing when there is no single exact hit', function (): void {
     Livewire::test(RecordPalette::class)->set('phrase', '666555')->call('submit')->assertNoRedirect();
 });
 
-it('open refuses a record that is not in the current results', function (): void {
+it('open still opens a record that is no longer among the results, while the scope allows it', function (): void {
     $this->signIn($this->allAbilities());
     $shown = $this->createCustomer('Shown Person', null, '313131');
     $other = $this->createCustomer('Other Person', null, '979797');
@@ -171,10 +172,21 @@ it('open refuses a record that is not in the current results', function (): void
 
     $component = Livewire::test(RecordPalette::class)->set('phrase', '313131');
 
-    $component->call('open', 'customer', (string) $other->getKey())->assertNoRedirect()
+    // The results moved on while the click was on its way: the click must still open what it was on.
+    $component->call('open', 'customer', (string) $other->getKey())
+        ->assertRedirect(CustomerResource::getUrl('edit', ['record' => $other]));
+});
+
+it('open refuses what is not a record of that type, and a key that is not a key', function (): void {
+    $this->signIn($this->allAbilities());
+    $shown = $this->createCustomer('Shown Person', null, '313131');
+    $this->indexAll();
+
+    Livewire::test(RecordPalette::class)->set('phrase', '313131')
         ->call('open', 'order', (string) $shown->getKey())->assertNoRedirect()
-        ->call('open', 'customer', (string) $shown->getKey())
-        ->assertRedirect(CustomerResource::getUrl('edit', ['record' => $shown]));
+        ->call('open', 'no-such-type', (string) $shown->getKey())->assertNoRedirect()
+        ->call('open', 'order', 'not-a-uuid')->assertNoRedirect()
+        ->call('open', 'customer', 'not-a-number')->assertNoRedirect();
 });
 
 it('open checks access again when it is called', function (): void {
@@ -204,6 +216,18 @@ it('open stays inside the scope of the resource, orWhere included', function ():
 
     $component->call('open', 'customer', (string) $outside->getKey())->assertNoRedirect()
         ->call('open', 'customer', (string) $inside->getKey())->assertRedirect();
+});
+
+it('tells a screen reader the list is expanded while recently opened records are shown', function (): void {
+    $this->signIn($this->allAbilities());
+    $order = $this->createOrder('OR-AX', '616161');
+    $this->indexAll();
+    resolve(PaletteHistory::class)->record(auth()->user(), 'order', (string) $order->getKey());
+
+    Livewire::test(RecordPalette::class)->assertSeeHtml('aria-expanded="true"');
+
+    $this->signIn($this->allAbilities());
+    Livewire::test(RecordPalette::class)->assertSeeHtml('aria-expanded="false"');
 });
 
 it('keeps what it found out of the reach of the client', function (): void {
@@ -703,7 +727,7 @@ describe('the link to the list', function (): void {
         $component = Livewire::test(RecordPalette::class)->call('scopeTo', 'order')->set('phrase', '414141');
 
         $component->assertSeeHtml('href="'.e(OrderResource::getUrl('index', ['search' => '414141'])).'"')
-            ->assertSee(trans('filament-model-search::record-palette.open_list', ['label' => OrderResource::getPluralModelLabel(), 'phrase' => '414141']));
+            ->assertSee(trans('filament-model-search::record-palette.open_list_with_phrase', ['label' => OrderResource::getPluralModelLabel(), 'phrase' => '414141']));
         expect($component->html())->toContain('search=414141');
     });
 

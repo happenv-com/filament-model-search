@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\TextColumn;
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
@@ -242,4 +244,34 @@ it('notes a record opened with a plain click and offers it, with Clear history, 
 
     $page->script('document.querySelector("#filament-model-search-palette-option-clear-history").click()');
     $page->assertScript('document.querySelector("#filament-model-search-palette-option-clear-history") === null', true);
+});
+
+it('clears the narrowing with Backspace in an empty field', function () use ($trigger): void {
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->assertScript('document.querySelectorAll(".fi-record-palette-chip").length', 3);
+    $page->script('document.querySelectorAll(".fi-record-palette-chip")[1].click()');
+    $page->assertScript('document.querySelectorAll(".fi-record-palette-chip")[1].classList.contains("fi-active")', true);
+
+    $page->keys(PALETTE_INPUT, 'Backspace')
+        ->assertScript('document.querySelectorAll(".fi-record-palette-chip")[0].classList.contains("fi-active")', true);
+});
+
+it('starts the text of a row slot where the title starts, for a plain column and for a layout', function (): void {
+    config(['fixtures.order_row' => [
+        'belowTitle' => [Split::make([TextColumn::make('signature')])],
+        'aboveTitle' => [TextColumn::make('state')],
+    ]]);
+    $this->createOrder('OR-1007', '585858');
+    $this->indexAll();
+
+    // Where the first character of the text sits, whatever wrappers surround it.
+    $left = static fn (string $selector): string => '(() => { const e = document.querySelector("'.$selector.'"); const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP }); const r = document.createRange(); r.selectNodeContents(w.nextNode()); return Math.round(r.getBoundingClientRect().left) })()';
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click('button[aria-label="'.trans('filament-model-search::record-palette.trigger').'"]');
+    $page->type(PALETTE_INPUT, '585858')->assertScript('document.querySelectorAll("[data-palette-result]").length', 1);
+
+    $title = $page->script($left('.fi-record-palette-row-title'));
+
+    expect($page->script($left('.fi-record-palette-row-below')))->toBe($title)
+        ->and($page->script($left('.fi-record-palette-row-above')))->toBe($title);
 });

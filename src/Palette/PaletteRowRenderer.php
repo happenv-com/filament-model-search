@@ -88,7 +88,7 @@ final class PaletteRowRenderer
         foreach ($components as $component) {
             $component->record($record)->recordKey($key);
 
-            $this->refuseInteractive($component);
+            $this->refuseInteractive($component, $record, $key);
 
             $html .= $component->renderInLayout()?->toHtml() ?? '';
         }
@@ -98,13 +98,18 @@ final class PaletteRowRenderer
 
     /**
      * The row is one link: a column that is a link or a button, or takes input, would nest inside it and take the
-     * keyboard away from it.
+     * keyboard away from it. Columns that copy or expand on click are not refused (they open nothing), but should
+     * stay non-interactive.
      */
-    private function refuseInteractive(Column|LayoutComponent $component): void
+    private function refuseInteractive(Column|LayoutComponent $component, Model $record, string $key): void
     {
+        // The children of a layout keep the record of the last row they were rendered for: each one is judged against
+        // the record being rendered now, the way the layout hands it to them when it renders.
+        $component->record($record)->recordKey($key);
+
         if ($component instanceof LayoutComponent) {
             foreach ($component->getComponents() as $child) {
-                $this->refuseInteractive($child);
+                $this->refuseInteractive($child, $record, $key);
             }
 
             return;

@@ -225,18 +225,6 @@
         }
     }
 
-    .fi-record-palette-row-check {
-        flex: none;
-        width: 1.25rem;
-        height: 1.25rem;
-        margin-inline-start: auto;
-        color: var(--primary-600);
-
-        &:where(.dark *) {
-            color: var(--primary-400);
-        }
-    }
-
     .fi-record-palette-icon-button {
         display: grid;
         flex: none;
@@ -501,6 +489,13 @@
         & .fi-ta-split,
         & .fi-ta-stack {
             min-width: 0;
+        }
+
+        /* A column in a table cell is padded by the cell and by its own wrapper: here the text starts where the title starts. */
+        & .fi-ta-col,
+        & .fi-ta-text:not(.fi-inline),
+        & .fi-ta-icon:not(.fi-inline) {
+            padding: 0;
         }
 
         & .fi-ta-text-item {

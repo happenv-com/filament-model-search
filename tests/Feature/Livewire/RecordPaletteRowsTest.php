@@ -7,6 +7,7 @@ use Filament\Tables\Columns\Layout\Split;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Rows\ConfiguredOrderRow;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Rows\NotARow;
@@ -206,6 +207,18 @@ describe('a resource that describes its rows', function () use ($describeRows): 
         'an action' => [static fn () => TextColumn::make('clicked')->action(static fn (): null => null), 'calls an action'],
     ]);
 
+    it('judges the columns of a layout against the record being rendered, not the previous one', function () use ($describeRows): void {
+        // Only the second record's url resolves: the first one must not be the record the check looks at.
+        $describeRows(['belowTitle' => [Split::make([TextColumn::make('signature')->url(static fn (Order $record): ?string => $record->signature === 'OR-42' ? 'https://example.test/' : null)])]]);
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-41', '410041');
+        $this->createOrder('OR-42', '410042');
+        $this->indexAll();
+
+        expect(fn () => Livewire::test(RecordPalette::class)->set('phrase', 'OR-4'))
+            ->toThrow(LogicException::class, '[signature]');
+    });
+
     it('lets a column display its link when the click is disabled for it', function () use ($describeRows): void {
         $describeRows(['belowTitle' => [TextColumn::make('state')->url('https://example.test')->disabledClick()]]);
         $this->signIn($this->allAbilities());
@@ -274,4 +287,21 @@ it('renders the row of a resource without a row class exactly as version 0.3.1 d
     )));
 
     expect($normalize($row[0] ?? ''))->toBe($normalize((string) file_get_contents(__DIR__.'/../../Fixtures/Markup/palette-row-0.3.1.html')));
+});
+
+it('renders a row with an icon and a match line exactly as version 0.3.1 did', function (): void {
+    $this->signIn($this->allAbilities());
+    $this->createCustomer('Icon Person', null, '5550001');
+    $this->indexAll();
+
+    $html = Livewire::test(RecordPalette::class)->set('phrase', '5550001')->html();
+    preg_match('/<a\b[^>]*role="option".*?<\/a>/s', $html, $row);
+
+    $normalize = static fn (string $markup): string => trim(str_replace('> <', '><', (string) preg_replace(
+        ['/<!--.*?-->/s', '/ x-on:click="if \(\$event\.button.*?\$wire\.open\([^)]*\) \}"/', '/ wire:navigate/', '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/', '/\/customers\/\d+/', '/customer-\d+/', '/\s+/'],
+        ['', '', '', '{key}', '/customers/{id}', 'customer-{id}', ' '],
+        $markup,
+    )));
+
+    expect($normalize($row[0] ?? ''))->toBe($normalize((string) file_get_contents(__DIR__.'/../../Fixtures/Markup/palette-row-icon-hint-0.3.1.html')));
 });
