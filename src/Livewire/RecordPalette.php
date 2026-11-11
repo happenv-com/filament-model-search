@@ -10,6 +10,7 @@ use Filament\Support\Contracts\ScalableIcon;
 use Filament\Support\Enums\IconSize;
 use Happenv\FilamentModelSearch\Binding\ResourceBinding;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
+use Happenv\FilamentModelSearch\History\PaletteHistory;
 use Happenv\FilamentModelSearch\Palette\PaletteRowRenderer;
 use Happenv\FilamentModelSearch\Palette\RenderedPaletteRow;
 use Happenv\FilamentModelSearch\Palette\SearchResultRow;
@@ -42,6 +43,7 @@ use Throwable;
  * @phpstan-type PaletteDetail array{label: string, value: string}
  * @phpstan-type PaletteItem array{id: string, title: string, url: string, exact: bool, hint: array{label: string, value: string}|null, details: list<PaletteDetail>, image: string|null, relatedTerm: string|null}
  * @phpstan-type PaletteGroup array{type: string, label: string, pluralLabel: string, icon: string|null, items: list<PaletteItem>, more: bool}
+ * @phpstan-type RecentItem array{type: string, id: string, title: string, url: string, details: list<PaletteDetail>, image: string|null, icon: string|null}
  * @phpstan-type PaletteChip array{type: string, label: string, icon: string|null, current: bool}
  * @phpstan-type PaletteFound array{groups: list<PaletteGroup>, outcome: string|null, stage: bool, timedOut: bool, indexBuilding: bool, total: int, capacity: int}
  */
@@ -64,6 +66,15 @@ final class RecordPalette extends Component
      */
     #[Locked]
     public ?string $scope = null;
+
+    /**
+     * What "Recently opened" shows right now: the pairs `open()` accepts besides the results. Filled while the field
+     * is empty, from the history of the current user, and emptied once a phrase is typed.
+     *
+     * @var list<array{type: string, id: string}>
+     */
+    #[Locked]
+    public array $recent = [];
 
     #[Locked]
     public bool $everyStage = false;
@@ -209,8 +220,20 @@ final class RecordPalette extends Component
         $url = $record instanceof Model ? $binding->url($record) : null;
 
         if ($url !== null) {
+            resolve(PaletteHistory::class)->record(Filament::auth()->user(), $type, (string) $record->getKey());
+
             $this->redirect($url, navigate: true);
         }
+    }
+
+    /**
+     * Forgets what the current user opened from the palette.
+     */
+    public function clearHistory(): void
+    {
+        resolve(PaletteHistory::class)->clear(Filament::auth()->user());
+
+        $this->recent = [];
     }
 
     public function render(): View
@@ -229,7 +252,12 @@ final class RecordPalette extends Component
         $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $choices);
         $listUrl = $scoped instanceof ResourceBinding && $found['groups'] !== [] ? $scoped->listUrl($phrase) : null;
 
+        $recent = $isShort ? $this->recentOpened() : ['items' => [], 'rows' => []];
+        $this->recent = array_map(static fn (array $item): array => ['type' => $item['type'], 'id' => $item['id']], $recent['items']);
+
         return view('filament-model-search::livewire.record-palette', [
+            'recentItems' => $recent['items'],
+            'recentRows' => $recent['rows'],
             'groups' => $found['groups'],
             'rows' => $this->rowsOf($found['groups']),
             'chips' => count($choices) >= 2 ? $this->chips($choices) : [],
@@ -595,6 +623,92 @@ final class RecordPalette extends Component
     }
 
     /**
+     * The records the current user opened from the palette, newest first, in the rows the results use. A record is
+     * skipped when it was deleted, when the user may no longer open it, or when its resource is no longer bound,
+     * accessible or shown by this panel: the history is a list of what can be opened now, not of what was.
+     *
+     * @return array{items: list<RecentItem>, rows: array<string, array<string, RenderedPaletteRow>>}
+     */
+    private function recentOpened(): array
+    {
+        $history = resolve(PaletteHistory::class);
+        $entries = $history->recent(Filament::auth()->user());
+
+        if ($entries === []) {
+            return ['items' => [], 'rows' => []];
+        }
+
+        $keysByType = [];
+
+        foreach ($entries as $entry) {
+            $keysByType[$entry['type']][] = $entry['key'];
+        }
+
+        $limit = max(1, $this->configInt('palette.history.limit', 5));
+        $records = [];
+        $bindings = [];
+        $rows = [];
+
+        foreach ($keysByType as $type => $keys) {
+            $binding = $this->bindingOfType((string) $type);
+
+            if (! $binding instanceof ResourceBinding || ! $binding->isAccessible()) {
+                continue;
+            }
+
+            $bindings[$type] = $binding;
+            $loaded = $binding->recordsInScope($keys);
+            $records[$type] = $loaded->keyBy(static fn (Model $record): string => (string) $record->getKey());
+        }
+
+        $items = [];
+        $shown = [];
+
+        foreach ($entries as $entry) {
+            $record = ($records[$entry['type']] ?? null)?->get($entry['key']);
+            $binding = $bindings[$entry['type']] ?? null;
+
+            if (! $record instanceof Model || ! $binding instanceof ResourceBinding) {
+                continue;
+            }
+
+            $url = $binding->url($record);
+
+            if (blank($url)) {
+                continue;
+            }
+
+            $title = $binding->title($record);
+
+            $items[] = [
+                'type' => $entry['type'],
+                'id' => $entry['key'],
+                'title' => $title instanceof Htmlable ? strip_tags($title->toHtml()) : $title,
+                'url' => $url,
+                'details' => $binding->details($record),
+                'image' => $binding->image($record),
+                'icon' => $this->iconName($binding->icon()),
+            ];
+            $shown[$entry['type']][] = $record;
+
+            if (count($items) === $limit) {
+                break;
+            }
+        }
+
+        // Only what is shown is rendered.
+        foreach ($shown as $type => $shownRecords) {
+            $row = $bindings[$type]->paletteRow();
+
+            if ($row instanceof SearchResultRow) {
+                $rows[$type] = new PaletteRowRenderer($bindings[$type]->resourceClass(), $row)->render($shownRecords);
+            }
+        }
+
+        return ['items' => $items, 'rows' => $rows];
+    }
+
+    /**
      * The rendered slots of what is on screen, for the resources that describe their rows. A search rendered them
      * already; any other request loads the records again, inside the scope of their resource and only while the user
      * may still open it.
@@ -661,6 +775,10 @@ final class RecordPalette extends Component
 
     private function isFound(string $type, string $id): bool
     {
+        if (in_array(['type' => $type, 'id' => $id], $this->recent, true)) {
+            return true;
+        }
+
         foreach ($this->found['groups'] as $group) {
             if ($group['type'] !== $type) {
                 continue;

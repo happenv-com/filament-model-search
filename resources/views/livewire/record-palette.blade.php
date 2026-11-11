@@ -261,9 +261,44 @@
                 role="listbox"
                 id="filament-model-search-palette-results"
                 aria-label="{{ __('filament-model-search::record-palette.title') }}"
-                @if ($groups === []) hidden @endif
+                @if ($groups === [] && $recentItems === []) hidden @endif
                 class="fi-record-palette-results"
             >
+                @if ($recentItems !== [])
+                    <section wire:key="recent" role="group" aria-labelledby="filament-model-search-palette-recent">
+                        <h3 role="presentation" id="filament-model-search-palette-recent" class="fi-record-palette-group-heading">
+                            {{ __('filament-model-search::record-palette.recently_opened') }}
+                        </h3>
+
+                        <div class="fi-record-palette-rows">
+                            @foreach ($recentItems as $item)
+                                @include('filament-model-search::livewire.record-palette.row', ['type' => $item['type'], 'item' => $item, 'icon' => $item['icon'], 'slots' => $recentRows[$item['type']][$item['id']] ?? null, 'isResult' => false])
+                            @endforeach
+
+                            <button
+                                type="button"
+                                wire:key="recent-clear"
+                                id="filament-model-search-palette-option-clear-history"
+                                role="option"
+                                tabindex="-1"
+                                wire:click="clearHistory"
+                                x-on:click="activeId = null; $refs.phrase.focus({ preventScroll: true })"
+                                data-enter-label="{{ __('filament-model-search::record-palette.clear_history') }}"
+                                x-on:mousemove="if (activeId !== $el.id) activeId = $el.id"
+                                x-bind:aria-selected="activeId === $el.id ? 'true' : 'false'"
+                                x-bind:class="{ 'fi-selected': activeId === $el.id }"
+                                class="fi-record-palette-row fi-record-palette-row-quiet"
+                            >
+                                <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::OutlinedTrash" class="fi-record-palette-row-icon" />
+
+                                <span class="fi-record-palette-row-main">
+                                    <span class="fi-record-palette-row-title" style="display: block">{{ __('filament-model-search::record-palette.clear_history') }}</span>
+                                </span>
+                            </button>
+                        </div>
+                    </section>
+                @endif
+
                 @foreach ($groups as $group)
                     <section wire:key="group-{{ $group['type'] }}" role="group" aria-labelledby="filament-model-search-palette-group-{{ $group['type'] }}">
                         <h3 role="presentation" id="filament-model-search-palette-group-{{ $group['type'] }}" class="fi-record-palette-group-heading">
@@ -272,77 +307,7 @@
 
                         <div class="fi-record-palette-rows">
                             @foreach ($group['items'] as $item)
-                                @php($slots = $rows[$group['type']][$item['id']] ?? null)
-                                <div wire:key="item-{{ $group['type'] }}-{{ $item['id'] }}" class="fi-record-palette-row-ctn">
-                                    <a
-                                        id="filament-model-search-palette-option-{{ $group['type'] }}-{{ $item['id'] }}"
-                                        role="option"
-                                        href="{{ $item['url'] }}"
-                                        wire:navigate
-                                        tabindex="-1"
-                                        data-palette-result
-                                        data-enter-label="{{ __('filament-model-search::record-palette.open_record') }}"
-                                        x-on:mousemove="if (activeId !== $el.id) activeId = $el.id"
-                                        x-bind:aria-selected="activeId === $el.id ? 'true' : 'false'"
-                                        x-bind:class="{ 'fi-selected': activeId === $el.id }"
-                                        @class(['fi-record-palette-row', 'fi-record-palette-row-slotted' => $slots !== null && ! $slots->isEmpty()])
-                                    >
-                                        @if ($slots !== null && $slots->leading !== '')
-                                            <span class="fi-record-palette-row-leading">{!! $slots->leading !!}</span>
-                                        @elseif ($item['image'])
-                                            <img src="{{ $item['image'] }}" alt="" loading="lazy" class="fi-record-palette-row-image" />
-                                        @elseif ($group['icon'])
-                                            <x-filament::icon :icon="$group['icon']" class="fi-record-palette-row-icon" />
-                                        @endif
-
-                                        <span class="fi-record-palette-row-main">
-                                            @if ($slots !== null && $slots->aboveTitle !== '')
-                                                <span class="fi-record-palette-row-above" style="display: block">{!! $slots->aboveTitle !!}</span>
-                                            @endif
-
-                                            @if ($slots !== null && $slots->besideTitle !== '')
-                                                <span class="fi-record-palette-row-heading" style="display: flex">
-                                                    <span class="fi-record-palette-row-title">{{ $item['title'] }}</span>
-                                                    <span class="fi-record-palette-row-beside">{!! $slots->besideTitle !!}</span>
-                                                </span>
-                                            @else
-                                                <span class="fi-record-palette-row-title" style="display: block">{{ $item['title'] }}</span>
-                                            @endif
-
-                                            @if ($slots !== null && $slots->belowTitle !== '')
-                                                <span class="fi-record-palette-row-below" style="display: block">{!! $slots->belowTitle !!}</span>
-                                            @elseif ($item['details'] !== [])
-                                                <span class="fi-record-palette-row-details" style="display: block">
-                                                    @foreach ($item['details'] as $detail)
-                                                        <b>{{ $detail['label'] }}:</b> {{ $detail['value'] }}@if (! $loop->last) · @endif
-                                                    @endforeach
-                                                </span>
-                                            @endif
-                                        </span>
-
-                                        @if ($slots !== null && $slots->trailing !== '')
-                                            <span class="fi-record-palette-row-trailing">{!! $slots->trailing !!}</span>
-                                        @endif
-
-                                        @if ($item['hint'])
-                                            <span class="fi-record-palette-row-hint" title="{{ $item['hint']['label'] }}: {{ $item['hint']['value'] }}">{{ $item['hint']['label'] }}: {{ $item['hint']['value'] }}</span>
-                                        @endif
-                                    </a>
-
-                                    @if (filled($item['relatedTerm']))
-                                        <button
-                                            type="button"
-                                            tabindex="-1"
-                                            wire:click="searchRelated(@js($group['type']), @js($item['id']))"
-                                            x-on:click="activeId = null; $refs.phrase.focus({ preventScroll: true })"
-                                            aria-label="{{ __('filament-model-search::record-palette.search_term', ['term' => $item['relatedTerm']]) }}"
-                                            title="{{ __('filament-model-search::record-palette.search_term', ['term' => $item['relatedTerm']]) }}"
-                                            class="fi-record-palette-icon-button fi-record-palette-related"
-                                        >
-                                            <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::OutlinedMagnifyingGlass" />
-                                        </button>
-                                    @endif
-                                </div>
+                                @include('filament-model-search::livewire.record-palette.row', ['type' => $group['type'], 'item' => $item, 'icon' => $group['icon'], 'slots' => $rows[$group['type']][$item['id']] ?? null, 'isResult' => true])
                             @endforeach
 
                             @if ($group['more'])
@@ -473,7 +438,7 @@
                         <span class="fi-record-palette-footer-hint">{{ __('filament-model-search::record-palette.hint') }}</span>
                     @endif
 
-                    @if ($groups !== [])
+                    @if ($groups !== [] || $recentItems !== [])
                         <div class="fi-record-palette-key">
                             <kbd>↑</kbd>
                             <kbd>↓</kbd>

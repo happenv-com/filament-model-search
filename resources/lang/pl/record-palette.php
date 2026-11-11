@@ -25,6 +25,8 @@ return [
     'show_all' => 'Pokaż wszystkie: :label',
     'open_list' => 'Otwórz listę: :label z frazą „:phrase”',
     'open_list_enter' => 'Otwórz listę',
+    'recently_opened' => 'Ostatnio otwierane',
+    'clear_history' => 'Wyczyść historię',
     'widen' => 'Rozszerz wyszukiwanie',
     'widen_description' => 'Nie znaleziono żadnych rekordów. Rozszerzone wyszukiwanie sprawdzi też podobne nazwy, z uwzględnieniem literówek.',
     'similar_empty_heading' => 'Brak podobnych wyników',

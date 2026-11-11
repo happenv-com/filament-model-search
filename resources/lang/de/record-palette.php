@@ -25,6 +25,8 @@ return [
     'show_all' => 'Alle anzeigen: :label',
     'open_list' => 'Liste „:label“ mit „:phrase“ öffnen',
     'open_list_enter' => 'Liste öffnen',
+    'recently_opened' => 'Zuletzt geöffnet',
+    'clear_history' => 'Verlauf löschen',
     'widen' => 'Suche erweitern',
     'widen_description' => 'Keine Datensätze gefunden. Die erweiterte Suche prüft auch ähnliche Namen und berücksichtigt Tippfehler.',
     'similar_empty_heading' => 'Keine ähnlichen Ergebnisse',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\CustomerResource;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
 use Illuminate\Support\Str;
 use Pest\Browser\Playwright\Playwright;
 
@@ -224,4 +225,21 @@ it('shows the type chips under the empty field, narrows with a click and widens 
         ->assertScript('document.querySelector(".fi-record-palette-chip.fi-active").textContent.trim()', Str::ucfirst(CustomerResource::getPluralModelLabel()));
     $page->script($chips.'[0].click()');
     $page->assertScript('document.querySelectorAll("[data-palette-result]").length', 2);
+});
+
+it('notes a record opened with a plain click and offers it, with Clear history, on the next visit', function () use ($trigger): void {
+    $order = $this->createOrder('OR-1006', '575757');
+    $this->indexAll();
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->type(PALETTE_INPUT, '575757')->assertScript('document.querySelectorAll("[data-palette-result]").length', 1);
+    $page->script('document.querySelector("[data-palette-result]").click()');
+    $page->assertScript('window.location.pathname', parse_url((string) OrderResource::getUrl('view', ['record' => $order]), PHP_URL_PATH));
+
+    $page = visit('/admin/orders')->assertScript(PALETTE_READY, true)->click($trigger());
+    $page->assertScript('document.querySelector("#filament-model-search-palette-option-order-'.$order->getKey().'") !== null', true)
+        ->assertScript('document.querySelector("#filament-model-search-palette-option-clear-history") !== null', true);
+
+    $page->script('document.querySelector("#filament-model-search-palette-option-clear-history").click()');
+    $page->assertScript('document.querySelector("#filament-model-search-palette-option-clear-history") === null', true);
 });

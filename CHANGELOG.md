@@ -10,6 +10,7 @@ All notable changes to `filament-model-search` will be documented in this file.
 - **Type chips** replace "Search in": a row under the field, for an empty field and for results, with "All" and one chip per resource that can be chosen (icon and label, navigation order). Shown when at least two can be chosen. The welcome list and the "Search in: ..." label inside the field are gone; Backspace in an empty field still clears the narrowing.
 - **"Show all <resources>"** ends a group that has more than `palette.per_group` records and narrows the search to that resource.
 - **"Open the <resources> list with “phrase”"** is the last option of a narrowed search: the list page with the phrase in the table search (`ResourceBinding::listUrl()`).
+- **"Recently opened"** while the field is empty: the last records the signed-in user opened from the palette (newest first, every type, the same rows as results, no match line or magnifier), with a quiet "Clear history" option at the bottom. Only the type and key of the record, the user and the time are stored, never the phrase. A plain click on a result goes through the component (`open()`) so it is noted; modified clicks stay native and are not noted. Configured under `palette.history` (`enabled`, `limit`, `keep`, `table`, `run_migrations`).
 - The match line is also dropped when the row's own columns already show its value.
 
 ## v0.3.1 - 2026-11-11

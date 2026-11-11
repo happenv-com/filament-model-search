@@ -25,6 +25,8 @@ return [
     'show_all' => 'Show all :label',
     'open_list' => 'Open the :label list with “:phrase”',
     'open_list_enter' => 'Open list',
+    'recently_opened' => 'Recently opened',
+    'clear_history' => 'Clear history',
     'widen' => 'Widen search',
     'widen_description' => 'No records found. A wider search also checks similar names and allows for typos.',
     'similar_empty_heading' => 'No similar results',

@@ -231,6 +231,7 @@ A modal that searches every bound resource at once (one `SearchQuery::palette()`
   ```
 
   The order of a row is `[leading] [aboveTitle / title + besideTitle / belowTitle] [trailing] [match line] [magnifier]`; the title, the match line and the magnifier stay the palette's. An empty `leading` falls back to the picture and the icon, an empty `belowTitle` to the details line, so a resource without a row class looks exactly as before. Below the `md` breakpoint `trailing` moves under `belowTitle`. The match line is dropped when the row already shows its value. Columns only display: an editable column, or one with a `url()` or an `action()`, throws a `LogicException` naming the resource and the column (the row is itself the link to the record; `disabledClick()` makes a link column display-only). The columns are rendered outside a table, so a column that reads a relation needs it in `with()`.
+- **Recently opened.** While the field is empty the palette lists the last records the signed-in user opened from it (`palette.history.limit`, default 5), newest first and of every type, in the same rows as results (your row class, fallbacks) but without a match line or a magnifier. "Clear history" at the bottom of the list deletes the user's history. Nothing is shown, not even a heading, when there is none. A record is noted when it is opened through the palette with a plain click or Enter; a modified click (new tab, middle click) keeps working natively and is not noted. Only the type and the key of the record, the user and the time are stored, never the phrase. A record that was deleted, that the user may no longer open, or whose resource is no longer bound is skipped. It needs a table: the package loads its migration (`run_migrations`, default `true`); a host that manages its own migrations sets it to `false` and publishes it with `php artisan vendor:publish --tag=filament-model-search-migrations`. `palette.history.enabled = false`, or no signed-in user, means nothing is read or written.
 - **Nothing is loaded until it is called.** A page holds only a small loader with the shortcut and the listener for `open-modal`. The Livewire component, the modal and the styles are fetched from the panel on the first call on a page, and are refused to a user the palette is not offered to.
 - A record found through a related one (a `via` field) is told by the related resource's name. It is found only if the user may also open the related resource: the parent's scope is the one of its resource, filled in by the palette. Otherwise nothing is found through it.
 - **Command-palette behaviour.** However the modal is opened (the shortcut, the built-in button, or your own `open-modal` dispatch), the search field is focused at once and a previous phrase is selected, so typing replaces it. The modal sits near the top of the viewport and keeps its place while results grow; on a phone it is full width with small side gutters, and the list scrolls inside it. On iOS the keyboard only rises for focus given inside a tap: the palette listens to the `open-modal` event synchronously and focuses a hidden proxy field at once, then hands the focus to the real field, so *any* trigger that dispatches `open-modal` from its click handler (the built-in button, or your own `x-on:click="$dispatch('open-modal', { id: '...' })"`) keeps the keyboard up. Do not open it from a timer or after a request.
@@ -290,6 +291,13 @@ return [
         'debounce_ms' => 250,
         'per_group' => 5,
         'per_scope' => 20,
+        'history' => [
+            'enabled' => true,
+            'limit' => 5,
+            'keep' => 20,
+            'table' => 'model_search_palette_history',
+            'run_migrations' => true,
+        ],
     ],
 
     // How long the readiness of an index is remembered, in seconds.
@@ -298,6 +306,8 @@ return [
 ```
 
 `trigger` draws the built-in button next to the global search (see [Your own trigger](#your-own-trigger)). `keybindings` is a list of shortcuts in the form `mod+shift+k` (`mod` is Command on macOS and Control elsewhere); several may be given. Characters other than letters, digits and `+`/`-` are stripped. An empty list leaves the button as the only way in.
+
+`history` is the palette's "Recently opened" (see [Record palette](#record-palette)): `limit` is how many are shown, `keep` how many are stored per user (older ones are dropped when a new one is written), `table` its table, and `run_migrations` whether the package loads its migration. Because Laravel merges config files one level deep, a published `palette` array replaces the whole default `palette`: copy the `history` block into it, or the defaults above apply.
 
 The rest of the behaviour (timeouts, rate limit, privacy, word handling) is the core's configuration, `config/model-search.php`.
 

@@ -137,7 +137,7 @@
     .fi-record-palette-chips {
         display: flex;
         gap: 0.5rem;
-        padding: 0 1rem 0.75rem;
+        padding: 0.25rem 1rem 0.75rem;
         overflow-x: auto;
         scrollbar-width: none;
 
@@ -207,6 +207,21 @@
         &:where(.dark *) .fi-record-palette-row-title,
         &:where(.dark *) .fi-record-palette-row-icon {
             color: var(--primary-400);
+        }
+    }
+
+    .fi-record-palette-row-quiet {
+        margin-top: 0.25rem;
+
+        & .fi-record-palette-row-title,
+        & .fi-record-palette-row-icon {
+            color: var(--gray-500);
+            font-size: 0.8125rem;
+        }
+
+        &:where(.dark *) .fi-record-palette-row-title,
+        &:where(.dark *) .fi-record-palette-row-icon {
+            color: var(--gray-400);
         }
     }
 

@@ -266,8 +266,10 @@ it('renders the row of a resource without a row class exactly as version 0.3.1 d
     preg_match('/<a\b[^>]*role="option".*?<\/a>/s', $html, $row);
 
     $normalize = static fn (string $markup): string => trim(str_replace('> <', '><', (string) preg_replace(
-        ['/<!--.*?-->/s', '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/', '/\s+/'],
-        ['', '{key}', ' '],
+        // Only how the link is opened changed since 0.3.1 (a plain click goes through the component, to be
+        // noted in the history, instead of `wire:navigate`): the rest of the row is compared as it was.
+        ['/<!--.*?-->/s', '/ x-on:click="if \(\$event\.button.*?\$wire\.open\([^)]*\) \}"/', '/ wire:navigate/', '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/', '/\s+/'],
+        ['', '', '', '{key}', ' '],
         $markup,
     )));
 
