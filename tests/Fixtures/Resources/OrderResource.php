@@ -10,11 +10,12 @@ use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Happenv\FilamentModelSearch\Concerns\InteractsWithModelSearch;
+use Happenv\FilamentModelSearch\Palette\SearchResultRow;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\EditOrder;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ListOrders;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ViewOrder;
-use Happenv\FilamentModelSearch\Tests\Fixtures\Rows\ConfiguredOrderRow;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Rows\RowLabel;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -48,18 +49,29 @@ final class OrderResource extends Resource
     }
 
     /**
-     * Tests describe the row through `fixtures.order_row` (see ConfiguredOrderRow); `fixtures.order_row_class`
-     * replaces the class, and `false` there leaves the method returning null.
+     * Tests describe the row through `fixtures.order_row` (slot name => columns or a closure, `with` => relations);
+     * `fixtures.order_row_returns` makes the method return something else, `fixtures.order_row_label` adds a column
+     * reading the injected RowLabel.
      */
-    public static function getGlobalSearchResultRow(): ?string
+    public static function globalSearchResultRow(SearchResultRow $row, RowLabel $label): mixed
     {
-        $class = config('fixtures.order_row_class');
+        $returned = config('fixtures.order_row_returns');
 
-        if ($class === false) {
-            return null;
+        if ($returned !== null) {
+            return $returned;
         }
 
-        return is_string($class) ? $class : (config('fixtures.order_row') === null ? null : ConfiguredOrderRow::class);
+        if (config('fixtures.order_row_label') === true) {
+            $row->belowTitle([TextColumn::make('label')->getStateUsing(static fn (): string => $label->text)]);
+        }
+
+        $slots = config('fixtures.order_row');
+
+        foreach (is_array($slots) ? $slots : [] as $slot => $value) {
+            $row->{$slot}($value);
+        }
+
+        return $row;
     }
 
     /**

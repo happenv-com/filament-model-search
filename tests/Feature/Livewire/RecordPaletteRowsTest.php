@@ -6,11 +6,14 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\Layout\Split;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
+use Happenv\FilamentModelSearch\Binding\ResourceBinding;
 use Happenv\FilamentModelSearch\Livewire\RecordPalette;
+use Happenv\FilamentModelSearch\Palette\SearchResultRow;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\LegacyRowResource;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource;
-use Happenv\FilamentModelSearch\Tests\Fixtures\Rows\ConfiguredOrderRow;
-use Happenv\FilamentModelSearch\Tests\Fixtures\Rows\NotARow;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Rows\RowLabel;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -20,7 +23,8 @@ beforeEach(function (): void {
     config([
         'filament-model-search.readiness_cache_seconds' => 0,
         'fixtures.order_row' => null,
-        'fixtures.order_row_class' => null,
+        'fixtures.order_row_returns' => null,
+        'fixtures.order_row_label' => null,
         'fixtures.order_details_customer' => null,
         'fixtures.order_image' => null,
     ]);
@@ -248,28 +252,48 @@ describe('a resource that does not describe its rows', function (): void {
     });
 });
 
-describe('the row class of a resource', function (): void {
-    it('is refused when it is not a SearchResultRow, naming the resource and the class', function (): void {
-        config(['fixtures.order_row_class' => NotARow::class]);
+describe('the row method of a resource', function (): void {
+    it('is refused when it returns something else than the row it was given, naming the resource and the type', function (): void {
+        config(['fixtures.order_row_returns' => 'not a row']);
         $this->signIn($this->allAbilities());
         $this->createOrder('OR-30', '300001');
         $this->indexAll();
 
         expect(fn () => Livewire::test(RecordPalette::class)->set('phrase', 'OR-30'))
-            ->toThrow(LogicException::class, OrderResource::class)
-            ->and(fn () => Livewire::test(RecordPalette::class)->set('phrase', 'OR-30'))
-            ->toThrow(LogicException::class, NotARow::class);
+            ->toThrow(LogicException::class, OrderResource::class.'::globalSearchResultRow()] returned [string]');
     });
 
-    it('is built by the container, so a host can inject into it', function (): void {
+    it('is called through the container, so a host can ask for more than the row', function (): void {
         $this->signIn($this->allAbilities());
         $this->createOrder('OR-31', '310001');
         $this->indexAll();
-        config(['fixtures.order_row_class' => ConfiguredOrderRow::class]);
-        config(['fixtures.order_row' => ['belowTitle' => [TextColumn::make('c')->getStateUsing(static fn (): string => 'FROM-CONTAINER')]]]);
-        app()->bind(ConfiguredOrderRow::class, static fn (): ConfiguredOrderRow => new ConfiguredOrderRow);
+        config(['fixtures.order_row_label' => true]);
+        app()->bind(RowLabel::class, static fn (): RowLabel => new RowLabel('FROM-CONTAINER'));
 
         Livewire::test(RecordPalette::class)->set('phrase', 'OR-31')->assertSee('FROM-CONTAINER');
+    });
+
+    it('shows the default row when the row is returned untouched', function (): void {
+        expect(new ResourceBinding(OrderSearch::class, OrderResource::class, Order::class)->paletteRow())->toBeNull();
+    });
+
+    it('refuses a resource that still names a row class, pointing at the new method', function (): void {
+        expect(fn () => new ResourceBinding(OrderSearch::class, LegacyRowResource::class, Order::class)->paletteRow())
+            ->toThrow(LogicException::class, 'globalSearchResultRow(SearchResultRow $row): SearchResultRow');
+    });
+
+    it('gives a slot closure the row, by name and by type', function (): void {
+        $row = SearchResultRow::make()
+            ->besideTitle(static fn (SearchResultRow $row): array => [TextColumn::make('by-type')])
+            ->trailing(static fn ($row): array => $row instanceof SearchResultRow ? [TextColumn::make('by-name')] : []);
+
+        expect(array_map(static fn ($column): string => $column->getName(), [...$row->getBesideTitle(), ...$row->getTrailing()]))
+            ->toBe(['by-type', 'by-name']);
+    });
+
+    it('refuses a slot that holds something else than table columns', function (): void {
+        expect(fn () => SearchResultRow::make()->belowTitle(['plain text'])->getBelowTitle())
+            ->toThrow(LogicException::class, '[belowTitle] slot of a search result row holds [string]');
     });
 });
 

@@ -605,7 +605,7 @@ final class RecordPalette extends Component
         $rows = [];
 
         if ($row instanceof SearchResultRow) {
-            $records->loadMissing($row->with());
+            $records->loadMissing($row->getWith());
             $rows = new PaletteRowRenderer($binding->resourceClass(), $row)->render($records);
             $this->renderedRows[$this->alias($binding)] = $rows;
         }

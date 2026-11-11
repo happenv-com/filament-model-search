@@ -123,7 +123,7 @@ final readonly class ResourceBinding
         }
 
         $records->loadMissing($scope->getEagerLoads());
-        $records->loadMissing($this->paletteRow()?->with() ?? []);
+        $records->loadMissing($this->paletteRow()?->getWith() ?? []);
 
         return $records;
     }
@@ -227,36 +227,43 @@ final readonly class ResourceBinding
     }
 
     /**
-     * How the palette shows the records of the resource: the row class its optional static
-     * `getGlobalSearchResultRow(): ?string` names, resolved through the container. Without one the records look the
-     * way the palette shows them by default.
+     * How the palette shows the records of the resource: the row its optional static
+     * `globalSearchResultRow(SearchResultRow $row): SearchResultRow` describes, called through the container so it may
+     * ask for more than the row. Without the method the records look the way the palette shows them by default.
      *
-     * @throws LogicException When the class is not a SearchResultRow.
+     * Built again on every call: bindings live as long as the worker, the columns and their labels belong to a request.
+     *
+     * @throws LogicException When the method returns something else than a row, or the resource still names a row
+     *                        class the way versions before 0.5 did.
      */
     public function paletteRow(): ?SearchResultRow
     {
         $resource = $this->resourceClass;
 
-        if (! method_exists($resource, 'getGlobalSearchResultRow')) {
-            return null;
-        }
-
-        $class = $resource::getGlobalSearchResultRow();
-
-        if ($class === null) {
-            return null;
-        }
-
-        if (! is_string($class) || ! is_subclass_of($class, SearchResultRow::class)) {
+        if (method_exists($resource, 'getGlobalSearchResultRow')) {
             throw new LogicException(sprintf(
-                '[%s::getGlobalSearchResultRow()] returned [%s], which is not a subclass of [%s].',
+                '[%s::getGlobalSearchResultRow()] is no longer read: since version 0.5 a resource describes its row in [public static function globalSearchResultRow(SearchResultRow $row): SearchResultRow].',
                 $resource,
-                is_string($class) ? $class : get_debug_type($class),
+            ));
+        }
+
+        // `method_exists()`, not `is_callable()`: a resource answers every static call through its macros.
+        if (! method_exists($resource, 'globalSearchResultRow')) {
+            return null;
+        }
+
+        $row = app()->call($resource.'::globalSearchResultRow', ['row' => SearchResultRow::make()]);
+
+        if (! $row instanceof SearchResultRow) {
+            throw new LogicException(sprintf(
+                '[%s::globalSearchResultRow()] returned [%s] instead of the [%s] it was given.',
+                $resource,
+                get_debug_type($row),
                 SearchResultRow::class,
             ));
         }
 
-        return app($class);
+        return $row->isConfigured() ? $row : null;
     }
 
     private function optionalString(string $method, Model $record): ?string
