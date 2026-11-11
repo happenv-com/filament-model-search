@@ -251,6 +251,8 @@ it('clears the narrowing with Backspace in an empty field', function () use ($tr
     $page->assertScript('document.querySelectorAll(".fi-record-palette-chip").length', 3);
     $page->script('document.querySelectorAll(".fi-record-palette-chip")[1].click()');
     $page->assertScript('document.querySelectorAll(".fi-record-palette-chip")[1].classList.contains("fi-active")', true);
+    // Backspace reads the scope the server confirmed: wait for it, the way a person waits for the results of the chip.
+    $page->assertScript('(async () => { for (let i = 0; i < 200; i++) { const c = window.Livewire.all().find((c) => c.name === "filament-model-search.record-palette"); if (c && c.$wire.scope !== null) return true; await new Promise((r) => setTimeout(r, 50)) } return false })()', true);
 
     // Waited for, not read once: the narrowing comes back from the server, and WebKit answers later than Chromium.
     $page->keys(PALETTE_INPUT, 'Backspace')
