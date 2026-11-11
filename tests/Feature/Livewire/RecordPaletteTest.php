@@ -88,11 +88,43 @@ it('offers search every stage when results came from a stage', function (): void
 
     $component = Livewire::test(RecordPalette::class)->set('phrase', '424242');
 
-    $component->assertSee('OR-OPEN')->assertDontSee('OR-SHIPPED')->assertSee(trans('filament-model-search::record-palette.search_every_stage'));
+    // The definition names both stages, so the line says which one is shown and the button which one it opens.
+    $component->assertSee('OR-OPEN')->assertDontSee('OR-SHIPPED')
+        ->assertSee('Showing: Open orders')
+        ->assertSee('All orders')
+        ->assertDontSee(trans('filament-model-search::record-palette.search_every_stage'))
+        ->assertDontSee(trans('filament-model-search::record-palette.stage_note'));
 
     $component->call('searchEveryStage')
         ->assertSee('OR-SHIPPED')
-        ->assertDontSee(trans('filament-model-search::record-palette.search_every_stage'));
+        ->assertDontSee('Showing: Open orders')
+        ->assertDontSeeHtml('filament-model-search-palette-option-every-stage');
+});
+
+it('falls back to the generic stage line when the stage has no label', function (): void {
+    $this->signIn(['customers.viewAny', 'customers.update']);
+    $this->createCustomer('Stage Active', '434343-a@example.test');
+    $this->createCustomer('Stage Inactive', '434343-b@example.test', null, ['active' => false]);
+    $this->indexAll();
+
+    Livewire::test(RecordPalette::class)->set('phrase', '434343')
+        ->assertSee('Stage Active')->assertDontSee('Stage Inactive')
+        ->assertSee(trans('filament-model-search::record-palette.stage_note'))
+        ->assertSee(trans('filament-model-search::record-palette.search_every_stage'));
+});
+
+it('names no stage when several types answered from their stages', function (): void {
+    $this->signIn($this->allAbilities());
+    $this->createOrder('OR-OPEN', '444444-A');
+    $this->createCustomer('Stage Active', '444444-a@example.test');
+    $this->indexAll();
+
+    // "Showing: Open orders" would be wrong about the customers: the sentence that fits every type is used instead.
+    Livewire::test(RecordPalette::class)->set('phrase', '444444')
+        ->assertSee('OR-OPEN')->assertSee('Stage Active')
+        ->assertDontSee('Showing: Open orders')
+        ->assertSee(trans('filament-model-search::record-palette.stage_note'))
+        ->assertSee(trans('filament-model-search::record-palette.search_every_stage'));
 });
 
 it('offers similar only for letters, never runs it on its own', function (): void {
@@ -404,8 +436,8 @@ it('starts the stages over with a new phrase', function (): void {
 
     // The answer "this came from a stage" belongs to the phrase: a new one is searched in the stage again.
     $component->set('phrase', '525252-')->assertSet('everyStage', false)
-        ->assertSee(trans('filament-model-search::record-palette.search_every_stage'))
-        ->assertSee(trans('filament-model-search::record-palette.stage_note'));
+        ->assertSee('Showing: Open orders')
+        ->assertSee('All orders');
 });
 
 it('names the parent through the label of its resource, localised', function (): void {
@@ -799,7 +831,7 @@ describe('when nothing is found', function (): void {
         $this->signIn($this->allAbilities());
         $this->indexAll();
 
-        Livewire::test(RecordPalette::class)->set('phrase', 'Nobody Here')->assertDontSee(trans('filament-model-search::record-palette.search_every_stage'));
+        Livewire::test(RecordPalette::class)->set('phrase', 'Nobody Here')->assertDontSeeHtml('filament-model-search-palette-option-every-stage');
     });
 });
 
@@ -810,7 +842,7 @@ it('does not offer every stage when the results already came from all of them', 
 
     Livewire::test(RecordPalette::class)->set('phrase', '424299')
         ->assertSee('OR-SHIPPED-ONLY')
-        ->assertDontSee(trans('filament-model-search::record-palette.search_every_stage'));
+        ->assertDontSeeHtml('filament-model-search-palette-option-every-stage');
 });
 
 describe('search in one resource', function (): void {

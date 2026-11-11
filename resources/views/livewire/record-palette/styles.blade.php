@@ -338,6 +338,19 @@
         }
     }
 
+    /* Which stage the results are from: a caption above the rows on a narrow screen, the start of the line on a wide one. */
+    .fi-record-palette-widen-note {
+        display: block;
+        padding: 0.25rem 0.5rem;
+        color: var(--gray-500);
+        font-size: 0.75rem;
+        line-height: 1rem;
+
+        &:where(.dark *) {
+            color: var(--gray-400);
+        }
+    }
+
     /* The options that widen the search: one short line on a wide screen, rows on a narrow one. */
     @media (min-width: 40rem) {
         .fi-record-palette-widen {
@@ -366,8 +379,10 @@
                 gap: 0.5rem;
             }
 
-            & .fi-record-palette-row-details {
-                display: inline !important;
+            & .fi-record-palette-widen-note {
+                display: inline;
+                padding: 0.25rem 0 0.25rem 0.5rem;
+                font-size: 0.8125rem;
             }
         }
     }

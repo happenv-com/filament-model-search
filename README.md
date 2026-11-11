@@ -198,7 +198,7 @@ List the resource in the plugin (see [Binding resources](#binding-resources)). T
 
 - Until the index serves the model, the resource's global search stays Filament's own.
 - Once it does, the index answers inside `getGlobalSearchResults()`, in the core's ranking order, within `getGlobalSearchEloquentQuery()` (so the resource's own scope, soft deletes and tenant constraints apply), up to `getGlobalSearchResultsLimit()`.
-- **Every stage is searched at once** (`withoutStages()`), as native Filament global search returns every record: this surface has no room for a note saying that only the open orders were searched. The palette, which has the room, starts with the first stage and offers "Search all".
+- **Every stage is searched at once** (`withoutStages()`), as native Filament global search returns every record: this surface has no room for a note saying that only the open orders were searched. The palette, which has the room, starts with the first stage and offers the rest of them.
 - Titles, urls, details and actions are the resource's own (`getGlobalSearchResultTitle()`, `getGlobalSearchResultUrl()`, `getGlobalSearchResultDetails()`, `getGlobalSearchResultActions()`); the records are loaded with the scope's own eager loads.
 - A line telling what matched is added to the details: the value when the core's reveal rule lets the viewer see it, and otherwise only **"Matched by: <field>"**. A value that equals the title adds nothing, and a native detail of the same name is kept.
 - `modifyGlobalSearchQuery()` is **not applied** on the index path: it works on Filament's native `ILIKE` query, which does not exist there. Put constraints into `getGlobalSearchEloquentQuery()` instead, or into the core's definition.
@@ -237,7 +237,21 @@ A modal that searches every bound resource at once (one `SearchQuery::palette()`
 - **Command-palette behaviour.** However the modal is opened (the shortcut, the built-in button, or your own `open-modal` dispatch), the search field is focused at once and a previous phrase is selected, so typing replaces it. The modal sits near the top of the viewport and keeps its place while results grow; on a phone it is full width with small side gutters, and the list scrolls inside it. On iOS the keyboard only rises for focus given inside a tap: the palette listens to the `open-modal` event synchronously and focuses a hidden proxy field at once, then hands the focus to the real field, so *any* trigger that dispatches `open-modal` from its click handler (the built-in button, or your own `x-on:click="$dispatch('open-modal', { id: '...' })"`) keeps the keyboard up. Do not open it from a timer or after a request.
 - **Arrow keys** move a highlight through the results, across groups, wrapping at both ends; the mouse pointer sets it too. **Enter** opens the highlighted record. The field is a `combobox` over a `listbox` (`aria-activedescendant`), so a screen reader hears the highlighted record. **Escape** closes the modal and keeps the phrase: reopening shows it again, selected.
 - **Enter** with nothing highlighted opens the record when exactly one hit of the whole palette is an exact one.
-- **"Search all"** appears when the answer came from a stage (for example only open orders): it repeats the search over every stage. It applies to the phrase on screen and is reset when the phrase changes, so the user asks again for the next phrase.
+- **The stage line** appears when the answer came from a stage (for example only open orders): it says which stage is shown and offers a button that repeats the search over every stage. It applies to the phrase on screen and is reset when the phrase changes, so the user asks again for the next phrase. Both texts come from the definition's stage labels, resolved in the viewer's locale:
+
+  ```php
+  public function stages(): array
+  {
+      return [
+          SearchStage::make('open', fn (Builder $query): Builder => $query->where('state', 'open'))
+              ->watching(['state'])
+              ->label(fn (): string => __('Open orders')),      // "Showing: Open orders"
+          SearchStage::all()->label(fn (): string => __('All orders')), // the button
+      ];
+  }
+  ```
+
+  Without a label, or when several types answered from their stages at once, the line falls back to the generic "Showing only records in progress." and "Search all".
 - **"Search for similar"** (also `mod+enter` in the modal) finds names close to what was typed (typos). It is offered for a phrase that has letters and is not shaped like an identifier (an order number or an e-mail), while the groups are not full. It is **never** run unless the user asks: not while typing, not as a fallback. The run is one `similar()` per resource, each charged to the rate limit on its own, so a limit hit on a later resource drops the results of the whole run.
 - A search that timed out, an index that is still building, a refused search and an empty answer are different states with their own notices. Records that came back are shown whatever the flags say, with a notice.
 - Access is checked on every search and again when a record is opened. What was found is kept in a locked Livewire property: the browser can read it, not change it.

@@ -389,6 +389,8 @@
                     {{-- One short line under the results on a wide screen; ordinary rows at the end on a narrow one. --}}
                     <div class="fi-record-palette-more fi-record-palette-widen">
                         @if ($offersEveryStage)
+                            <span class="fi-record-palette-widen-note">{{ $stageShown }}</span>
+
                             <button
                                 type="button"
                                 id="filament-model-search-palette-option-every-stage"
@@ -404,8 +406,7 @@
                                 <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::OutlinedMagnifyingGlassPlus" class="fi-record-palette-row-icon" />
 
                                 <span class="fi-record-palette-row-main">
-                                    <span class="fi-record-palette-row-title" style="display: block">{{ __('filament-model-search::record-palette.search_every_stage') }}</span>
-                                    <span class="fi-record-palette-row-details" style="display: block">{{ __('filament-model-search::record-palette.stage_note') }}</span>
+                                    <span class="fi-record-palette-row-title" style="display: block">{{ $everyStageLabel }}</span>
                                 </span>
                             </button>
                         @endif
