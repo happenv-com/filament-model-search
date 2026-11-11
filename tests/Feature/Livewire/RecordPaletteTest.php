@@ -586,6 +586,19 @@ describe('the type chips', function (): void {
         expect(strpos($html, 'wire:click="clearScope"'))->toBeLessThan(strpos($html, $chipHtml('order')));
     });
 
+    it('show icons on every chip, All included, or on none of them', function (): void {
+        $this->signIn($this->allAbilities());
+        // Counted on the icons' own tags: the stylesheet in the component names the class too.
+        $icons = static fn (string $html): int => (int) preg_match_all('/<svg[^>]*fi-record-palette-chip-icon/', $html);
+
+        // Customers have an icon, orders none: an icon on one chip only would make the row ragged.
+        expect($icons(Livewire::test(RecordPalette::class)->html()))->toBe(0);
+
+        config(['fixtures.order_icon' => 'heroicon-o-shopping-bag']);
+
+        expect($icons(Livewire::test(RecordPalette::class)->html()))->toBe(3);
+    });
+
     it('stay when results are shown, and mark the current one', function () use ($chipHtml): void {
         $this->signIn($this->allAbilities());
         $this->createOrder('OR-90', '900001');

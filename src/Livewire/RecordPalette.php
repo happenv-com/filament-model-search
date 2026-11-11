@@ -241,13 +241,15 @@ final class RecordPalette extends Component
         $listUrl = $scoped instanceof ResourceBinding && $found['groups'] !== [] ? $scoped->listUrl($phrase) : null;
 
         $recent = $isShort ? $this->recentOpened() : ['items' => [], 'rows' => []];
+        $chips = count($choices) >= 2 ? $this->chips($choices) : [];
 
         return view('filament-model-search::livewire.record-palette', [
             'recentItems' => $recent['items'],
             'recentRows' => $recent['rows'],
             'groups' => $found['groups'],
             'rows' => $this->rowsOf($found['groups']),
-            'chips' => count($choices) >= 2 ? $this->chips($choices) : [],
+            'chips' => $chips,
+            'chipsHaveIcons' => $chips !== [] && ! in_array(null, array_column($chips, 'icon'), true),
             'listUrl' => $listUrl,
             'listLabel' => $scoped instanceof ResourceBinding ? $scoped->label() : null,
             'phraseShown' => $phrase,
@@ -330,12 +332,19 @@ final class RecordPalette extends Component
     {
         usort($bindings, static fn (ResourceBinding $a, ResourceBinding $b): int => $a->sort() <=> $b->sort());
 
-        return array_map(fn (ResourceBinding $binding): array => [
+        $chips = array_map(fn (ResourceBinding $binding): array => [
             'type' => $this->alias($binding),
             'label' => Str::ucfirst($binding->label()),
             'icon' => $this->iconName($binding->icon()),
             'current' => $this->alias($binding) === $this->scope,
         ], $bindings);
+
+        // Icons on some chips and not others make a ragged row: either every chip has one, "All" included, or none does.
+        if (in_array(null, array_column($chips, 'icon'), true)) {
+            return array_map(static fn (array $chip): array => ['icon' => null] + $chip, $chips);
+        }
+
+        return $chips;
     }
 
     /**

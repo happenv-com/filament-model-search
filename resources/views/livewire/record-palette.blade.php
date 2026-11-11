@@ -237,6 +237,10 @@
                         aria-pressed="{{ $scope === null ? 'true' : 'false' }}"
                         @class(['fi-record-palette-chip', 'fi-active' => $scope === null])
                     >
+                        @if ($chipsHaveIcons)
+                            <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::OutlinedSquares2x2" class="fi-record-palette-chip-icon" />
+                        @endif
+
                         {{ __('filament-model-search::record-palette.all') }}
                     </button>
 
