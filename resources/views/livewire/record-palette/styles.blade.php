@@ -163,7 +163,7 @@
     .fi-record-palette-chips {
         display: flex;
         gap: 0.5rem;
-        padding: 0.25rem 1rem 0.75rem;
+        padding: 0.5rem 1rem;
         overflow-x: auto;
         scrollbar-width: none;
 
