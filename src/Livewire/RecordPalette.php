@@ -240,7 +240,8 @@ final class RecordPalette extends Component
         $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $choices);
         $listUrl = $scoped instanceof ResourceBinding && $found['groups'] !== [] ? $scoped->listUrl($phrase) : null;
 
-        $recent = $isShort ? $this->recentOpened() : ['items' => [], 'rows' => []];
+        // Only an empty field: one character already asks for a second one, and the history would not match it.
+        $recent = $phrase === '' ? $this->recentOpened() : ['items' => [], 'rows' => []];
         $chips = count($choices) >= 2 ? $this->chips($choices) : [];
 
         return view('filament-model-search::livewire.record-palette', [

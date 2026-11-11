@@ -115,16 +115,21 @@ describe('a resource that describes its rows', function () use ($describeRows): 
 
         $this->indexAll();
 
+        // The query log is scoped to the callback: a listener could not be removed and would keep counting.
         $customerLoads = static function (Closure $callback): int {
-            $count = 0;
-            DB::listen(static function ($query) use (&$count): void {
-                if (str_contains($query->sql, 'from "customers"') && str_contains($query->sql, '"customers"."id" in (')) {
-                    $count++;
-                }
-            });
-            $callback();
+            DB::flushQueryLog();
+            DB::enableQueryLog();
 
-            return $count;
+            try {
+                $callback();
+            } finally {
+                DB::disableQueryLog();
+            }
+
+            $loads = array_filter(DB::getQueryLog(), static fn (array $entry): bool => str_contains($entry['query'], 'from "customers"') && str_contains($entry['query'], '"customers"."id" in ('));
+            DB::flushQueryLog();
+
+            return count($loads);
         };
 
         $component = null;

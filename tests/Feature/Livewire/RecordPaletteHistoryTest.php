@@ -26,7 +26,7 @@ beforeEach(function (): void {
 /**
  * Opens a record through the palette the way a click does.
  */
-$openThrough = static function (object $test, string $phrase, string $type, string $id): void {
+$openThrough = static function (string $phrase, string $type, string $id): void {
     Livewire::test(RecordPalette::class)->set('phrase', $phrase)->call('open', $type, $id);
 };
 
@@ -35,7 +35,7 @@ it('notes a record when it is opened, and shows it while the field is empty', fu
     $order = $this->createOrder('OR-H1', '710001');
     $this->indexAll();
 
-    $openThrough($this, '710001', 'order', (string) $order->getKey());
+    $openThrough('710001', 'order', (string) $order->getKey());
 
     $component = Livewire::test(RecordPalette::class)
         ->assertSee(trans('filament-model-search::record-palette.recently_opened'))
@@ -55,14 +55,14 @@ it('shows nothing, not even a heading, when nothing was opened', function (): vo
         ->assertDontSee(trans('filament-model-search::record-palette.clear_history'));
 });
 
-it('hides the history once a phrase is typed', function () use ($openThrough): void {
+it('hides the history once a phrase is typed, even one too short to search', function (string $phrase) use ($openThrough): void {
     $this->signIn($this->allAbilities());
     $order = $this->createOrder('OR-H2', '720001');
     $this->indexAll();
-    $openThrough($this, '720001', 'order', (string) $order->getKey());
+    $openThrough('720001', 'order', (string) $order->getKey());
 
-    Livewire::test(RecordPalette::class)->set('phrase', 'zz')->assertDontSee(trans('filament-model-search::record-palette.recently_opened'));
-});
+    Livewire::test(RecordPalette::class)->set('phrase', $phrase)->assertDontSee(trans('filament-model-search::record-palette.recently_opened'));
+})->with(['z', 'zz']);
 
 it('lists the newest first, mixed types, up to the limit', function () use ($openThrough): void {
     config(['filament-model-search.palette.history.limit' => 3]);
@@ -73,13 +73,13 @@ it('lists the newest first, mixed types, up to the limit', function () use ($ope
     foreach (['A', 'B', 'C', 'D'] as $i => $letter) {
         $order = $this->createOrder('OR-L'.$letter, '73000'.$i);
         $this->indexAll();
-        $openThrough($this, '73000'.$i, 'order', (string) $order->getKey());
+        $openThrough('73000'.$i, 'order', (string) $order->getKey());
         $this->travel(1)->minutes();
     }
 
     $customer = $this->createCustomer('Mixed Customer', null, '730099');
     $this->indexAll();
-    $openThrough($this, '730099', 'customer', (string) $customer->getKey());
+    $openThrough('730099', 'customer', (string) $customer->getKey());
 
     $html = Livewire::test(RecordPalette::class)->html();
 
@@ -96,11 +96,11 @@ it('moves a record that is opened again to the top', function () use ($openThrou
     $second = $this->createOrder('OR-M2', '740002');
     $this->indexAll();
 
-    $openThrough($this, '740001', 'order', (string) $first->getKey());
+    $openThrough('740001', 'order', (string) $first->getKey());
     $this->travel(1)->minutes();
-    $openThrough($this, '740002', 'order', (string) $second->getKey());
+    $openThrough('740002', 'order', (string) $second->getKey());
     $this->travel(1)->minutes();
-    $openThrough($this, '740001', 'order', (string) $first->getKey());
+    $openThrough('740001', 'order', (string) $first->getKey());
 
     $html = Livewire::test(RecordPalette::class)->html();
 
@@ -112,7 +112,7 @@ it('keeps the history of each user to that user', function () use ($openThrough)
     $this->signIn($this->allAbilities());
     $order = $this->createOrder('OR-U1', '750001');
     $this->indexAll();
-    $openThrough($this, '750001', 'order', (string) $order->getKey());
+    $openThrough('750001', 'order', (string) $order->getKey());
 
     $this->signIn($this->allAbilities());
 
@@ -124,15 +124,15 @@ it('skips a record that was deleted and one the user may no longer open', functi
     $gone = $this->createOrder('OR-GONE', '760001');
     $customer = $this->createCustomer('Still Allowed', null, '760002');
     $this->indexAll();
-    $openThrough($this, '760001', 'order', (string) $gone->getKey());
-    $openThrough($this, '760002', 'customer', (string) $customer->getKey());
+    $openThrough('760001', 'order', (string) $gone->getKey());
+    $openThrough('760002', 'customer', (string) $customer->getKey());
 
     $gone->delete();
     Livewire::test(RecordPalette::class)->assertDontSee('OR-GONE')->assertSee('Still Allowed');
 
     $other = $this->createOrder('OR-LOCKED', '760003');
     $this->indexAll();
-    $openThrough($this, '760003', 'order', (string) $other->getKey());
+    $openThrough('760003', 'order', (string) $other->getKey());
 
     $this->signIn(['customers.viewAny', 'customers.update']);
     DB::table('model_search_palette_history')->update(['user_id' => (string) auth()->id()]);
@@ -144,7 +144,7 @@ it('opens a history row', function () use ($openThrough): void {
     $this->signIn($this->allAbilities());
     $order = $this->createOrder('OR-O1', '770001');
     $this->indexAll();
-    $openThrough($this, '770001', 'order', (string) $order->getKey());
+    $openThrough('770001', 'order', (string) $order->getKey());
 
     Livewire::test(RecordPalette::class)->call('open', 'order', (string) $order->getKey())
         ->assertRedirect(OrderResource::getUrl('view', ['record' => $order]));
@@ -155,8 +155,8 @@ it('skips a record that left the scope of its resource while the resource stays 
     $kept = $this->createCustomer('Kept In Scope', null, '810001');
     $left = $this->createCustomer('Left The Scope', null, '810002');
     $this->indexAll();
-    $openThrough($this, '810001', 'customer', (string) $kept->getKey());
-    $openThrough($this, '810002', 'customer', (string) $left->getKey());
+    $openThrough('810001', 'customer', (string) $kept->getKey());
+    $openThrough('810002', 'customer', (string) $left->getKey());
 
     config(['fixtures.customer_scope' => static fn (Builder $query): Builder => $query->where('name', '!=', 'Left The Scope')]);
 
@@ -167,7 +167,7 @@ it('forgets everything with Clear history', function () use ($openThrough): void
     $this->signIn($this->allAbilities());
     $order = $this->createOrder('OR-C1', '780001');
     $this->indexAll();
-    $openThrough($this, '780001', 'order', (string) $order->getKey());
+    $openThrough('780001', 'order', (string) $order->getKey());
 
     Livewire::test(RecordPalette::class)->assertSee('OR-C1')
         ->call('clearHistory')
@@ -183,7 +183,7 @@ it('records and shows nothing when history is disabled', function () use ($openT
     $this->signIn($this->allAbilities());
     $order = $this->createOrder('OR-D1', '790001');
     $this->indexAll();
-    $openThrough($this, '790001', 'order', (string) $order->getKey());
+    $openThrough('790001', 'order', (string) $order->getKey());
 
     expect(DB::table('model_search_palette_history')->count())->toBe(0);
     Livewire::test(RecordPalette::class)->assertDontSee(trans('filament-model-search::record-palette.recently_opened'));

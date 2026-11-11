@@ -122,7 +122,7 @@ Return `null` (or leave the method out) for no picture or no magnifier. What a r
 - **Recently opened** (empty field): the last records the current user opened from the palette, newest first, same rows as results without the match line or magnifier, plus "Clear history". Stored per user as type + key + time in `palette.history.table` (migration loaded by the package unless `palette.history.run_migrations` is false; publish tag `filament-model-search-migrations`); never the phrase. Plain clicks go through `open()`, modified clicks stay native and are not noted. `palette.history.enabled`, `limit`, `keep`.
 - "Search all" repeats a staged search over every stage; "Search for similar" (`mod+enter`) runs typo tolerance only when asked.
 - Timed-out, index-building, rate-limited, unavailable and empty answers are separate states; results that came back are shown with a notice.
-- What was found and the scope live in locked Livewire properties; `open()` and `searchRelated()` accept only records of the current results, and access is asked again.
+- What was found and the scope live in locked Livewire properties. `searchRelated()` accepts only a term a record of the current results offered; `open()` opens any record the user may open now (a bound, accessible resource and a record inside its scope), so a click still works when the results moved on, and access is asked again every time.
 
 ## Configuration
 

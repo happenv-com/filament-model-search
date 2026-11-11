@@ -41,6 +41,8 @@
             this.unfit = () => {
                 viewport.removeEventListener('resize', fit)
                 viewport.removeEventListener('scroll', fit)
+                root.style.removeProperty('--fi-record-palette-viewport-height')
+                root.style.removeProperty('--fi-record-palette-viewport-top')
             }
         },
         options() {
