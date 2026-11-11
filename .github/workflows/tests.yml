@@ -81,6 +81,8 @@ jobs:
 
       - name: Install the browsers for the palette tests
         if: matrix.php == '8.5'
+        # apt waits 20 s per package when the Ubuntu mirrors do not resolve: fail within minutes instead of an hour.
+        timeout-minutes: 10
         run: |
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium webkit
