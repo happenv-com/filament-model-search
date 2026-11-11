@@ -120,6 +120,12 @@
             $wire.set('phrase', '')
             this.$refs.phrase.focus({ preventScroll: true })
         },
+        // Backspace in an empty field takes the narrowing off, the way a tag is taken off a search field.
+        clearScopeOnBackspace(event) {
+            if (event.isComposing || event.target.value !== '' || $wire.scope === null) return
+            event.preventDefault()
+            $wire.clearScope()
+        },
     }"
     x-on:open-modal.window="prepare($event)"
     x-on:x-modal-opened.document="opened($event)"
@@ -151,6 +157,23 @@
                     class="fi-record-palette-search-icon"
                 />
 
+                @if ($scopeLabel)
+                    <span class="fi-record-palette-scope">
+                        <span class="fi-record-palette-scope-label">{{ __('filament-model-search::record-palette.scope', ['label' => $scopeLabel]) }}</span>
+
+                        <button
+                            type="button"
+                            wire:click="clearScope"
+                            x-on:click="activeId = null; $refs.phrase.focus({ preventScroll: true })"
+                            aria-label="{{ __('filament-model-search::record-palette.clear_scope') }}"
+                            title="{{ __('filament-model-search::record-palette.clear_scope') }}"
+                            class="fi-record-palette-scope-clear"
+                        >
+                            <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::XMark" />
+                        </button>
+                    </span>
+                @endif
+
                 <input
                     x-ref="phrase"
                     type="search"
@@ -164,6 +187,7 @@
                     x-on:keydown.arrow-down="move($event, 1)"
                     x-on:keydown.arrow-up="move($event, -1)"
                     x-on:keydown.tab="searchRelatedOnTab($event)"
+                    x-on:keydown.backspace="clearScopeOnBackspace($event)"
                     x-on:keydown.escape="if (!$event.isComposing) $event.preventDefault()"
                     maxlength="1000"
                     autocomplete="off"
@@ -174,22 +198,29 @@
                     class="fi-record-palette-input"
                 />
 
+                {{-- One place: the spinner stands where the reset button is for as long as a search runs. --}}
                 <div class="fi-record-palette-search-tail">
                     <x-filament::loading-indicator
                         wire:loading
-                        wire:target="phrase, searchSimilar, searchEveryStage, searchRelated"
+                        wire:target="phrase, searchSimilar, searchEveryStage, searchRelated, scopeTo, clearScope"
                     />
 
-                    <button
-                        type="button"
-                        x-cloak
-                        x-show="$wire.phrase !== ''"
-                        x-on:click="clearPhrase()"
-                        aria-label="{{ __('filament-model-search::record-palette.clear') }}"
-                        class="fi-record-palette-icon-button"
+                    <span
+                        wire:loading.remove
+                        wire:target="phrase, searchSimilar, searchEveryStage, searchRelated, scopeTo, clearScope"
+                        class="fi-record-palette-clear"
                     >
-                        <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::XMark" />
-                    </button>
+                        <button
+                            type="button"
+                            x-cloak
+                            x-show="$wire.phrase !== ''"
+                            x-on:click="clearPhrase()"
+                            aria-label="{{ __('filament-model-search::record-palette.clear') }}"
+                            class="fi-record-palette-icon-button"
+                        >
+                            <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::XMark" />
+                        </button>
+                    </span>
                 </div>
             </div>
 
@@ -226,18 +257,19 @@
 
                         <div class="fi-record-palette-rows">
                             @foreach ($welcome as $entry)
-                                <a
+                                <button
+                                    type="button"
                                     wire:key="welcome-{{ $entry['type'] }}"
                                     id="filament-model-search-palette-welcome-{{ $entry['type'] }}"
                                     role="option"
-                                    href="{{ $entry['url'] }}"
-                                    wire:navigate
                                     tabindex="-1"
-                                    data-enter-label="{{ __('filament-model-search::record-palette.open_list') }}"
+                                    wire:click="scopeTo(@js($entry['type']))"
+                                    x-on:click="activeId = null; $refs.phrase.focus({ preventScroll: true })"
+                                    data-enter-label="{{ __($entry['current'] ? 'filament-model-search::record-palette.clear_scope' : 'filament-model-search::record-palette.narrow') }}"
                                     x-on:mousemove="if (activeId !== $el.id) activeId = $el.id"
                                     x-bind:aria-selected="activeId === $el.id ? 'true' : 'false'"
                                     x-bind:class="{ 'fi-selected': activeId === $el.id }"
-                                    class="fi-record-palette-row"
+                                    @class(['fi-record-palette-row', 'fi-record-palette-row-current' => $entry['current']])
                                 >
                                     @if ($entry['icon'])
                                         <x-filament::icon :icon="$entry['icon']" class="fi-record-palette-row-icon" />
@@ -246,7 +278,11 @@
                                     <span class="fi-record-palette-row-main">
                                         <span class="fi-record-palette-row-title" style="display: block">{{ $entry['label'] }}</span>
                                     </span>
-                                </a>
+
+                                    @if ($entry['current'])
+                                        <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::Check" class="fi-record-palette-row-check" />
+                                    @endif
+                                </button>
                             @endforeach
                         </div>
                     </section>
@@ -303,8 +339,8 @@
                                             tabindex="-1"
                                             wire:click="searchRelated(@js($group['type']), @js($item['id']))"
                                             x-on:click="activeId = null; $refs.phrase.focus({ preventScroll: true })"
-                                            aria-label="{{ __('filament-model-search::record-palette.search_related') }}"
-                                            title="{{ __('filament-model-search::record-palette.search_related') }}"
+                                            aria-label="{{ __('filament-model-search::record-palette.search_term', ['term' => $item['relatedTerm']]) }}"
+                                            title="{{ __('filament-model-search::record-palette.search_term', ['term' => $item['relatedTerm']]) }}"
                                             class="fi-record-palette-icon-button fi-record-palette-related"
                                         >
                                             <x-filament::icon :icon="\Filament\Support\Icons\Heroicon::OutlinedMagnifyingGlass" />

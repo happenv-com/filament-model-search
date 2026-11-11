@@ -118,16 +118,6 @@ final readonly class ResourceBinding
     }
 
     /**
-     * The page listing the resource's records, or none when the resource has no such page.
-     */
-    public function listUrl(): ?string
-    {
-        $resource = $this->resourceClass;
-
-        return $this->isOnCurrentPanel() && $resource::hasPage('index') ? $resource::getUrl('index') : null;
-    }
-
-    /**
      * The second line of a result: what the resource's global search shows under the title.
      *
      * @return list<array{label: string, value: string}>
