@@ -83,10 +83,9 @@ SelectFilter::make('customer_id')->relationship('customer', 'name')->searchable(
 
 ## Global search
 
-With the trait and the resource listed in the plugin, the index answers inside `getGlobalSearchResults()` once the model is ready:
+The trait's `getGlobalSearchResults()` takes one of two paths. When the model's index is ready, it runs the core's search inside `getGlobalSearchEloquentQuery()` (scope, soft deletes, tenancy), up to `getGlobalSearchResultsLimit()`, in the core's ranking order, **every stage at once** (`withoutStages()`). Otherwise (index not ready, or the resource is not the one bound on this panel) it falls back to Filament's own global search, where `modifyGlobalSearchQuery()` applies.
 
-- Within `getGlobalSearchEloquentQuery()` (scope, soft deletes, tenancy), up to `getGlobalSearchResultsLimit()`, in the core's ranking order, **every stage at once** (`withoutStages()`).
-- `modifyGlobalSearchQuery()` is **not applied** on the index path (it shapes Filament's native `ILIKE` query). Put constraints in `getGlobalSearchEloquentQuery()` or in the core's definition.
+- `modifyGlobalSearchQuery()` therefore **stops applying** once the index is ready. Put constraints in `getGlobalSearchEloquentQuery()` (used on both paths) or in the core's definition.
 - Titles, urls, details and actions stay the resource's own; a "Matched by" line is added to the details (the value only when the core lets the viewer see it).
 
 ## The record palette
@@ -124,7 +123,10 @@ Return `null` (or leave the method out) for no picture or no magnifier. What a r
 
 ## Configuration
 
-`config/filament-model-search.php` (`php artisan vendor:publish --tag=filament-model-search-config`): `palette.enabled`, `palette.trigger`, `palette.keybindings`, `palette.debounce_ms`, `palette.per_group`, `palette.per_scope`, `palette.placeholder` (a translation key), `readiness_cache_seconds`. `paletteTrigger()` overrides `palette.trigger`; the palette is offered only when both `palette()` and `palette.enabled` are on. Texts live under `filament-model-search::` in `en`, `pl` and `de` (`--tag=filament-model-search-translations`; v0.3.0 added the `narrow`, `scope`, `clear_scope` and `search_term` keys and removed `open_list`, so republish published translations).
+- `config/filament-model-search.php` (`php artisan vendor:publish --tag=filament-model-search-config`): `palette.enabled`, `palette.trigger`, `palette.keybindings`, `palette.debounce_ms`, `palette.per_group`, `palette.per_scope`, `palette.placeholder` (a translation key), `readiness_cache_seconds`.
+- `paletteTrigger()` overrides `palette.trigger`. The palette is offered only when both `palette()` and `palette.enabled` are on.
+- Texts live under `filament-model-search::` in `en`, `pl` and `de`; publish with `--tag=filament-model-search-translations`.
+- v0.3.0 added the `narrow`, `scope`, `clear_scope` and `search_term` keys and removed `open_list`: an app that published the translations before must republish them (or add the keys).
 
 ## Testing
 
