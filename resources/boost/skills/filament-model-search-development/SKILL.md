@@ -1,6 +1,12 @@
 ---
 name: filament-model-search-development
-description: Connect Filament resources, tables, selects, global search and the record palette to happenv-com/laravel-model-search with happenv-com/filament-model-search. Use when binding a resource to a search definition (InteractsWithModelSearch, FilamentModelSearchPlugin::resources(), FilamentModelSearch::resource()), calling ->modelSearch() on a Table, Select or SelectFilter, configuring the record palette (rows, related term magnifier, "Search in", trigger, keybindings, per_group / per_scope), or testing any of these.
+description: >-
+  Connect Filament resources, tables, selects, global search and the record palette to
+  happenv-com/laravel-model-search with happenv-com/filament-model-search. Use when binding a
+  resource to a search definition (InteractsWithModelSearch, FilamentModelSearchPlugin::resources(),
+  FilamentModelSearch::resource()), calling ->modelSearch() on a Table, Select or SelectFilter,
+  configuring the record palette (rows, related term magnifier, "Search in", trigger, keybindings,
+  per_group / per_scope), or testing any of these.
 ---
 
 # Filament Model Search
