@@ -252,8 +252,9 @@ it('clears the narrowing with Backspace in an empty field', function () use ($tr
     $page->script('document.querySelectorAll(".fi-record-palette-chip")[1].click()');
     $page->assertScript('document.querySelectorAll(".fi-record-palette-chip")[1].classList.contains("fi-active")', true);
 
+    // Waited for, not read once: the narrowing comes back from the server, and WebKit answers later than Chromium.
     $page->keys(PALETTE_INPUT, 'Backspace')
-        ->assertScript('document.querySelectorAll(".fi-record-palette-chip")[0].classList.contains("fi-active")', true);
+        ->assertScript('(async () => { for (let i = 0; i < 200; i++) { if (document.querySelectorAll(".fi-record-palette-chip")[0].classList.contains("fi-active")) return true; await new Promise((r) => setTimeout(r, 50)) } return false })()', true);
 });
 
 it('starts the text of a row slot where the title starts, for a plain column and for a layout', function (): void {
@@ -272,8 +273,9 @@ it('starts the text of a row slot where the title starts, for a plain column and
 
     $title = $page->script($left('.fi-record-palette-row-title'));
 
-    expect($page->script($left('.fi-record-palette-row-below')))->toBe($title)
-        ->and($page->script($left('.fi-record-palette-row-above')))->toBe($title);
+    // Within a pixel: WebKit rounds sub-pixel offsets of nested boxes differently from Chromium.
+    expect(abs($page->script($left('.fi-record-palette-row-below')) - $title))->toBeLessThanOrEqual(1)
+        ->and(abs($page->script($left('.fi-record-palette-row-above')) - $title))->toBeLessThanOrEqual(1);
 });
 
 it('closes the palette with the field button when nothing is typed, and clears the phrase when something is', function () use ($focused, $trigger): void {
