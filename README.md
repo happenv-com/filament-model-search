@@ -17,6 +17,7 @@ The core package owns the index, the ranking, the privacy of the phrase and the 
 - [Static analysis](#static-analysis)
 - [Translations](#translations)
 - [Testing](#testing)
+- [AI assistants (Laravel Boost)](#ai-assistants-laravel-boost)
 - [Licence](#licence)
 
 ## Requirements
@@ -323,6 +324,10 @@ composer lint      # Pint
 composer analyse   # PHPStan level 8
 vendor/bin/rector --dry-run
 ```
+
+## AI assistants (Laravel Boost)
+
+The package ships a [Laravel Boost](https://laravel.com/docs/boost) skill, `filament-model-search-development`, in `resources/boost/skills/`. `php artisan boost:install` (or `boost:update`) offers it to your coding agent: binding resources, `modelSearch()` on tables and selects, the palette's row methods and its behaviour, and testing. The core package ships its own skill for definitions and deployment.
 
 ## Licence
 
