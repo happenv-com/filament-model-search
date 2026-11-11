@@ -57,6 +57,14 @@ final class OrderResource extends Resource
     }
 
     /**
+     * Tests leave the resource out of "Search in" through `fixtures.order_offered_as_palette_scope`.
+     */
+    public static function isOfferedAsPaletteScope(): bool
+    {
+        return config('fixtures.order_offered_as_palette_scope') !== false;
+    }
+
+    /**
      * Tests switch the related search on through `fixtures.order_related_term`: the customer's name, or none.
      */
     public static function getGlobalSearchResultRelatedTerm(Model $record): ?string

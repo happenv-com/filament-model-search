@@ -17,6 +17,7 @@ The core package owns the index, the ranking, the privacy of the phrase and the 
 - [Static analysis](#static-analysis)
 - [Translations](#translations)
 - [Testing](#testing)
+- [AI assistants (Laravel Boost)](#ai-assistants-laravel-boost)
 - [Licence](#licence)
 
 ## Requirements
@@ -209,9 +210,10 @@ A global search has no room for a message. A search that timed out, was refused,
 
 A modal that searches every bound resource at once (one `SearchQuery::palette()` call, so one rate-limit charge), opened from a button next to the panel's global search and by a keyboard shortcut. `FilamentModelSearchPlugin::make()->palette(false)` or `palette.enabled = false` switches it off. It is also absent for a user who may open none of the searched resources, and that is decided when the page renders, not at boot.
 
-- Type at least two characters. The search is debounced (`palette.debounce_ms`).
+- Type at least two characters. The search is debounced (`palette.debounce_ms`). While a search runs, a spinner stands where the button that clears the field is; the button comes back when the answer does.
+- **"Search in".** Before anything is typed the palette lists the resources it searches. Choosing one narrows the search to that resource: the field shows "Search in: Orders", the list marks the resource, and up to `palette.per_scope` records come back instead of `palette.per_group`. Choosing it again, the cross next to the label, or Backspace in an empty field searches everywhere again. A resource leaves the list with `public static function isOfferedAsPaletteScope(): bool { return false; }`: it is still searched everywhere, it only cannot be chosen alone (useful once there are many resources). Only a resource the user may open is accepted, and access is asked again on every search: a resource the user may no longer open widens the search to every resource.
 - Groups follow the navigation order of the resources, except that a group holding an exact hit comes first; at most `palette.per_group` records each. Each group shows the icon of its resource, each record the resource's own title and url, and what matched (the value only when the core lets the viewer see it; otherwise "Matched by: <field>").
-- **What a row shows.** The icon of the resource and its `getGlobalSearchResultTitle()`. The second line is the resource's `getGlobalSearchResultDetails()`; eager load what it reads in `getGlobalSearchEloquentQuery()`. Two optional methods add the rest: `getGlobalSearchResultImage(Model $record): ?string` shows a picture instead of the icon, and `getGlobalSearchResultRelatedTerm(Model $record): ?string` adds a magnifier that searches for that term (Tab on the highlighted row), so that a record leads to what is tied to it. No method or `null`: no picture, no magnifier. What the term reveals is the resource's to decide.
+- **What a row shows.** The icon of the resource and its `getGlobalSearchResultTitle()`. The second line is the resource's `getGlobalSearchResultDetails()`; eager load what it reads in `getGlobalSearchEloquentQuery()`. Two optional methods add the rest: `getGlobalSearchResultImage(Model $record): ?string` shows a picture instead of the icon, and `getGlobalSearchResultRelatedTerm(Model $record): ?string` adds a magnifier that puts that term in the field and searches every resource for it (Tab on the highlighted row), so that a record leads to what is tied to it. No method or `null`: no picture, no magnifier, and there is none either when the term is the phrase already searched, since it would change nothing. What the term reveals is the resource's to decide.
 - **Nothing is loaded until it is called.** A page holds only a small loader with the shortcut and the listener for `open-modal`. The Livewire component, the modal and the styles are fetched from the panel on the first call on a page, and are refused to a user the palette is not offered to.
 - A record found through a related one (a `via` field) is told by the related resource's name. It is found only if the user may also open the related resource: the parent's scope is the one of its resource, filled in by the palette. Otherwise nothing is found through it.
 - **Command-palette behaviour.** However the modal is opened (the shortcut, the built-in button, or your own `open-modal` dispatch), the search field is focused at once and a previous phrase is selected, so typing replaces it. The modal sits near the top of the viewport and keeps its place while results grow; on a phone it is full width with small side gutters, and the list scrolls inside it. On iOS the keyboard only rises for focus given inside a tap: the palette listens to the `open-modal` event synchronously and focuses a hidden proxy field at once, then hands the focus to the real field, so *any* trigger that dispatches `open-modal` from its click handler (the built-in button, or your own `x-on:click="$dispatch('open-modal', { id: '...' })"`) keeps the keyboard up. Do not open it from a timer or after a request.
@@ -270,6 +272,7 @@ return [
         'keybindings' => ['mod+shift+k'],
         'debounce_ms' => 250,
         'per_group' => 5,
+        'per_scope' => 20,
     ],
 
     // How long the readiness of an index is remembered, in seconds.
@@ -321,6 +324,10 @@ composer lint      # Pint
 composer analyse   # PHPStan level 8
 vendor/bin/rector --dry-run
 ```
+
+## AI assistants (Laravel Boost)
+
+The package ships a [Laravel Boost](https://laravel.com/docs/boost) skill, `filament-model-search-development`, in `resources/boost/skills/`. `php artisan boost:install` (or `boost:update`) offers it to your coding agent: binding resources, `modelSearch()` on tables and selects, the palette's row methods and its behaviour, and testing. The core package ships its own skill for definitions and deployment.
 
 ## Licence
 

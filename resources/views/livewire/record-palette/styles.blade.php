@@ -129,6 +129,69 @@
         }
     }
 
+    .fi-record-palette-clear {
+        display: grid;
+        place-items: center;
+    }
+
+    .fi-record-palette-scope {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: 0.125rem;
+        max-width: 50%;
+        height: 1.75rem;
+        padding-inline: 0.5rem 0.25rem;
+        border-radius: 0.375rem;
+        background-color: color-mix(in oklab, var(--primary-500) 10%, transparent);
+        color: var(--primary-700);
+        font-size: 0.75rem;
+        font-weight: 500;
+        line-height: 1rem;
+
+        &:where(.dark *) {
+            background-color: color-mix(in oklab, var(--primary-400) 15%, transparent);
+            color: var(--primary-300);
+        }
+    }
+
+    .fi-record-palette-scope-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .fi-record-palette-scope-clear {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 1.25rem;
+        height: 1.25rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+
+        & svg {
+            width: 0.875rem;
+            height: 0.875rem;
+        }
+
+        &:hover {
+            background-color: color-mix(in oklab, var(--primary-500) 15%, transparent);
+        }
+    }
+
+    .fi-record-palette-row-check {
+        flex: none;
+        width: 1.25rem;
+        height: 1.25rem;
+        margin-inline-start: auto;
+        color: var(--primary-600);
+
+        &:where(.dark *) {
+            color: var(--primary-400);
+        }
+    }
+
     .fi-record-palette-icon-button {
         display: grid;
         flex: none;

@@ -39,7 +39,7 @@ use Throwable;
  * @phpstan-type PaletteDetail array{label: string, value: string}
  * @phpstan-type PaletteItem array{id: string, title: string, url: string, exact: bool, hint: array{label: string, value: string}|null, details: list<PaletteDetail>, image: string|null, relatedTerm: string|null}
  * @phpstan-type PaletteGroup array{type: string, label: string, icon: string|null, items: list<PaletteItem>}
- * @phpstan-type PaletteWelcomeEntry array{type: string, label: string, icon: string|null, url: string}
+ * @phpstan-type PaletteWelcomeEntry array{type: string, label: string, icon: string|null, current: bool}
  * @phpstan-type PaletteFound array{groups: list<PaletteGroup>, outcome: string|null, stage: bool, timedOut: bool, indexBuilding: bool, total: int, capacity: int}
  */
 #[Isolate]
@@ -53,6 +53,14 @@ final class RecordPalette extends Component
     private const int MAX_LENGTH = 1000;
 
     public string $phrase = '';
+
+    /**
+     * The morph alias of the one resource the search is narrowed to, or null for every resource. Set only
+     * through `scopeTo()`, and asked again on every search: a resource the user may no longer open, or that is
+     * no longer offered under "Search in", widens it.
+     */
+    #[Locked]
+    public ?string $scope = null;
 
     #[Locked]
     public bool $everyStage = false;
@@ -74,11 +82,7 @@ final class RecordPalette extends Component
 
     public function updatedPhrase(#[\SensitiveParameter] mixed $value = null): void
     {
-        // A new phrase starts over: similar names are asked for, never carried along.
-        // "Results came from a stage" is an answer to this phrase: it starts over with it.
-        $this->similar = false;
-        $this->everyStage = false;
-        $this->search();
+        $this->startOver();
     }
 
     public function searchEveryStage(): void
@@ -99,8 +103,39 @@ final class RecordPalette extends Component
     }
 
     /**
-     * Searches for what a record of the current results names as its related term: only a term the
-     * record itself offered is accepted, the client cannot search through this for anything else.
+     * Narrows the search to one resource of "Search in", or back to every resource when it is the one already
+     * chosen. Only a resource listed there is accepted: one the user may open and search, and that is offered.
+     */
+    public function scopeTo(string $type): void
+    {
+        if ($this->scope === $type) {
+            $this->clearScope();
+
+            return;
+        }
+
+        if (! $this->scopeChoice($type, $this->scopeChoices()) instanceof ResourceBinding) {
+            return;
+        }
+
+        $this->scope = $type;
+        $this->startOver();
+    }
+
+    public function clearScope(): void
+    {
+        if ($this->scope === null) {
+            return;
+        }
+
+        $this->scope = null;
+        $this->startOver();
+    }
+
+    /**
+     * Puts in the field what a record of the current results names as its term, and searches everywhere for it:
+     * the term leads away from the record, often to another resource. Only a term the record itself offered is
+     * accepted, the client cannot search through this for anything else.
      */
     public function searchRelated(string $type, string $id): void
     {
@@ -111,9 +146,8 @@ final class RecordPalette extends Component
         }
 
         $this->phrase = $term;
-        $this->similar = false;
-        $this->everyStage = false;
-        $this->search();
+        $this->scope = null;
+        $this->startOver();
     }
 
     /**
@@ -184,9 +218,14 @@ final class RecordPalette extends Component
         $offersWiden = $this->offersWiden();
         $identifierShaped = PhraseKind::isIdentifierShaped($phrase);
 
+        // Asked once per render, for the list and for the label alike.
+        $choices = $isShort || $this->scope !== null ? $this->scopeChoices() : [];
+        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $choices);
+
         return view('filament-model-search::livewire.record-palette', [
             'groups' => $found['groups'],
-            'welcome' => $isShort ? $this->welcome() : [],
+            'welcome' => $isShort ? $this->welcome($choices) : [],
+            'scopeLabel' => $scoped instanceof ResourceBinding ? Str::ucfirst($scoped->label()) : null,
             'outcome' => $outcome,
             'offersEveryStage' => $found['stage'] && ! $this->everyStage && ! $this->similar,
             'offersSimilar' => $this->offersSimilar(),
@@ -257,37 +296,63 @@ final class RecordPalette extends Component
     }
 
     /**
-     * What is searched, shown before anything is typed. Asked now: the user changes.
+     * What the search can be narrowed to, shown before anything is typed.
      *
+     * @param  list<ResourceBinding>  $bindings  The current choices of "Search in".
      * @return list<PaletteWelcomeEntry>
      */
-    private function welcome(): array
+    private function welcome(array $bindings): array
     {
-        $bindings = array_values(array_filter(
-            resolve(ResourceBindings::class)->all(),
-            static fn (ResourceBinding $binding): bool => $binding->isAccessible(),
-        ));
-
         usort($bindings, static fn (ResourceBinding $a, ResourceBinding $b): int => $a->sort() <=> $b->sort());
 
-        $entries = [];
+        return array_map(fn (ResourceBinding $binding): array => [
+            'type' => $this->alias($binding),
+            'label' => Str::ucfirst($binding->label()),
+            'icon' => $this->iconName($binding->icon()),
+            'current' => $this->alias($binding) === $this->scope,
+        ], $bindings);
+    }
 
-        foreach ($bindings as $binding) {
-            $url = $binding->listUrl();
+    /**
+     * A new question starts over: similar names are asked for, never carried along, and "results came from a
+     * stage" is an answer to the phrase it was given for.
+     */
+    private function startOver(): void
+    {
+        $this->similar = false;
+        $this->everyStage = false;
+        $this->search();
+    }
 
-            if ($url === null) {
-                continue;
+    /**
+     * The resources of "Search in": offered there, the user may open them now and they have a search of their own.
+     *
+     * @return list<ResourceBinding>
+     */
+    private function scopeChoices(): array
+    {
+        return array_values(array_filter(
+            resolve(ResourceBindings::class)->all(),
+            static fn (ResourceBinding $binding): bool => $binding->offersScope()
+                && $binding->isAccessible()
+                && is_subclass_of($binding->searchClass(), ModelSearch::class),
+        ));
+    }
+
+    /**
+     * The one place that says whether a type may narrow the search right now.
+     *
+     * @param  list<ResourceBinding>  $choices  The current choices of "Search in".
+     */
+    private function scopeChoice(string $type, array $choices): ?ResourceBinding
+    {
+        foreach ($choices as $binding) {
+            if ($this->alias($binding) === $type) {
+                return $binding;
             }
-
-            $entries[] = [
-                'type' => $this->alias($binding),
-                'label' => Str::ucfirst($binding->label()),
-                'icon' => $this->iconName($binding->icon()),
-                'url' => $url,
-            ];
         }
 
-        return $entries;
+        return null;
     }
 
     private function search(): void
@@ -300,8 +365,15 @@ final class RecordPalette extends Component
             return;
         }
 
-        // Asked now, never remembered: the user may have changed since the palette was opened.
-        $bindings = array_values(array_filter(
+        // Asked now, never remembered: the user may have changed since the palette was opened. A resource that can
+        // no longer narrow the search (the user may not open it, or it left "Search in") widens it to every resource.
+        $scoped = $this->scope === null ? null : $this->scopeChoice($this->scope, $this->scopeChoices());
+
+        if (! $scoped instanceof ResourceBinding) {
+            $this->scope = null;
+        }
+
+        $bindings = $scoped instanceof ResourceBinding ? [$scoped] : array_values(array_filter(
             resolve(ResourceBindings::class)->all(),
             static fn (ResourceBinding $binding): bool => $binding->isAccessible(),
         ));
@@ -312,7 +384,9 @@ final class RecordPalette extends Component
             return;
         }
 
-        $perGroup = max(1, $this->configInt('palette.per_group', 5));
+        $perGroup = $this->scope === null
+            ? max(1, $this->configInt('palette.per_group', 5))
+            : max(1, $this->configInt('palette.per_scope', 20));
 
         try {
             $answers = $this->answers($bindings, $phrase, $perGroup);
@@ -451,6 +525,13 @@ final class RecordPalette extends Component
                 $line = null;
             }
 
+            $relatedTerm = $binding->relatedTerm($result->model);
+
+            // A magnifier that would put back the phrase already searched would do nothing: it is not offered.
+            if ($relatedTerm !== null && mb_strtolower(trim($relatedTerm)) === mb_strtolower($this->normalizedPhrase())) {
+                $relatedTerm = null;
+            }
+
             $items[] = [
                 'id' => (string) $result->model->getKey(),
                 'title' => $title,
@@ -459,7 +540,7 @@ final class RecordPalette extends Component
                 'hint' => $line === null ? null : ['label' => $line[0], 'value' => $line[1]],
                 'details' => $details,
                 'image' => $binding->image($result->model),
-                'relatedTerm' => $binding->relatedTerm($result->model),
+                'relatedTerm' => $relatedTerm,
             ];
         }
 

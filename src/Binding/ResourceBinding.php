@@ -118,16 +118,6 @@ final readonly class ResourceBinding
     }
 
     /**
-     * The page listing the resource's records, or none when the resource has no such page.
-     */
-    public function listUrl(): ?string
-    {
-        $resource = $this->resourceClass;
-
-        return $this->isOnCurrentPanel() && $resource::hasPage('index') ? $resource::getUrl('index') : null;
-    }
-
-    /**
      * The second line of a result: what the resource's global search shows under the title.
      *
      * @return list<array{label: string, value: string}>
@@ -162,6 +152,18 @@ final readonly class ResourceBinding
     public function relatedTerm(Model $record): ?string
     {
         return $this->optionalString('getGlobalSearchResultRelatedTerm', $record);
+    }
+
+    /**
+     * Whether the palette lists the resource under "Search in", so that the search can be narrowed to it: the
+     * optional static `isOfferedAsPaletteScope(): bool` of the resource, offered without one. A resource left out
+     * is still searched everywhere; it only cannot be chosen alone.
+     */
+    public function offersScope(): bool
+    {
+        $resource = $this->resourceClass;
+
+        return ! method_exists($resource, 'isOfferedAsPaletteScope') || $resource::isOfferedAsPaletteScope() === true;
     }
 
     private function optionalString(string $method, Model $record): ?string

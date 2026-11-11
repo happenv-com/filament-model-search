@@ -29,6 +29,7 @@ beforeEach(function (): void {
         'fixtures.order_icon' => null,
         'fixtures.order_image' => null,
         'fixtures.order_related_term' => null,
+        'fixtures.order_offered_as_palette_scope' => null,
     ]);
 });
 
@@ -248,7 +249,7 @@ it('shows the timed-out state when nothing came back in time', function (): void
 it('puts a notice above results that came back while part of the search ran out of time', function (): void {
     // The core flags a partial timeout only in rounds the public API cannot stage, so the view is given the state directly.
     $group = ['type' => 'order', 'label' => 'Orders', 'icon' => null, 'items' => [['id' => '1', 'title' => 'OR-FAST', 'url' => '/o/1', 'exact' => false, 'hint' => null, 'details' => [], 'image' => null, 'relatedTerm' => null]]];
-    $state = ['groups' => [$group], 'outcome' => 'results', 'offersEveryStage' => false, 'offersSimilar' => false, 'indexBuilding' => false, 'isShort' => false, 'debounce' => 250, 'similar' => false, 'welcome' => [], 'offersWiden' => false, 'emptyHeading' => '', 'emptyDescription' => '', 'enterLabel' => null, 'placeholder' => 'filament-model-search::record-palette.placeholder', 'phrase' => 'OR'];
+    $state = ['groups' => [$group], 'outcome' => 'results', 'offersEveryStage' => false, 'offersSimilar' => false, 'indexBuilding' => false, 'isShort' => false, 'debounce' => 250, 'similar' => false, 'welcome' => [], 'offersWiden' => false, 'emptyHeading' => '', 'emptyDescription' => '', 'enterLabel' => null, 'placeholder' => 'filament-model-search::record-palette.placeholder', 'phrase' => 'OR', 'scopeLabel' => null];
 
     $withNotice = view('filament-model-search::livewire.record-palette', [...$state, 'timedOut' => true, 'outcome' => SearchOutcome::Results])->render();
     $without = view('filament-model-search::livewire.record-palette', [...$state, 'timedOut' => false, 'outcome' => SearchOutcome::Results])->render();
@@ -356,12 +357,16 @@ it('binds Enter to the search input only, so links and buttons keep their own', 
         ->and($html)->toContain(e(trans('filament-model-search::record-palette.placeholder')));
 });
 
-it('rejects a client that sets the flags only the server may set', function (string $flag): void {
+it('rejects a client that sets the state only the server may set', function (string $property, bool|string $value): void {
     $this->signIn($this->allAbilities());
     $component = Livewire::test(RecordPalette::class)->set('phrase', 'abc');
 
-    expect(fn () => $component->set($flag, true))->toThrow(Exception::class, "Cannot update locked property: [{$flag}]");
-})->with(['similar', 'everyStage']);
+    expect(fn () => $component->set($property, $value))->toThrow(Exception::class, "Cannot update locked property: [{$property}]");
+})->with([
+    ['similar', true],
+    ['everyStage', true],
+    ['scope', 'order'],
+]);
 
 it('starts the stages over with a new phrase', function (): void {
     $this->signIn($this->allAbilities());
@@ -510,10 +515,36 @@ describe('a result row', function (): void {
 
         Livewire::test(RecordPalette::class)->set('phrase', 'OR-83')->call('searchRelated', 'order', '999999')->assertSet('phrase', 'OR-83');
     });
+
+    it('offers no magnifier that would put back the phrase already searched', function (): void {
+        config(['fixtures.order_related_term' => true]);
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-84', '840001');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)->set('phrase', 'or-84');
+
+        expect($component->get('found')['groups'][0]['items'][0]['relatedTerm'])->toBeNull();
+        $component->assertDontSeeHtml('wire:click="searchRelated');
+    });
+
+    it('names the term on the magnifier and searches every resource for it', function (): void {
+        config(['fixtures.order_related_term' => true]);
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-85', '850001');
+        $this->createOrder('OR-86', '860001');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)->call('scopeTo', 'order')->set('phrase', 'OR-8')
+            ->assertSeeHtml(e(trans('filament-model-search::record-palette.search_term', ['term' => 'OR-86'])));
+        $id = (string) Order::query()->where('signature', 'OR-86')->value('id');
+
+        $component->call('searchRelated', 'order', $id)->assertSet('phrase', 'OR-86')->assertSet('scope', null);
+    });
 });
 
 describe('before anything is typed', function (): void {
-    it('lists what can be searched, only what the user may open', function (): void {
+    it('lists what the search can be narrowed to, only what the user may open', function (): void {
         $this->signIn(['customers.viewAny', 'customers.update']);
 
         $component = Livewire::test(RecordPalette::class);
@@ -521,7 +552,8 @@ describe('before anything is typed', function (): void {
         $component->assertSee(trans('filament-model-search::record-palette.welcome_heading'))
             ->assertSee(Str::ucfirst(CustomerResource::getPluralModelLabel()))
             ->assertDontSee(Str::ucfirst(OrderResource::getPluralModelLabel()))
-            ->assertSeeHtml('href="'.e(CustomerResource::getUrl('index')).'"');
+            ->assertSeeHtml('wire:click="scopeTo(\'customer\')"')
+            ->assertDontSeeHtml('href="'.e(CustomerResource::getUrl('index')).'"');
     });
 
     it('hides the list once results are shown', function (): void {
@@ -580,4 +612,75 @@ it('does not offer every stage when the results already came from all of them', 
     Livewire::test(RecordPalette::class)->set('phrase', '424299')
         ->assertSee('OR-SHIPPED-ONLY')
         ->assertDontSee(trans('filament-model-search::record-palette.search_every_stage'));
+});
+
+describe('search in one resource', function (): void {
+    it('narrows the search to the chosen resource and shows more of it', function (): void {
+        $this->signIn($this->allAbilities());
+        foreach (range(1, 7) as $i) {
+            $this->createOrder('OR-'.$i, '575757-'.$i);
+        }
+        $this->createCustomer('Scope Holder', null, '575757');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)->call('scopeTo', 'order')
+            ->assertSet('scope', 'order')
+            ->assertSee(trans('filament-model-search::record-palette.scope', ['label' => Str::ucfirst(OrderResource::getPluralModelLabel())]))
+            ->set('phrase', '575757');
+        $groups = $component->get('found')['groups'];
+
+        expect(array_column($groups, 'type'))->toBe(['order'])
+            ->and(count($groups[0]['items']))->toBe(7);
+    });
+
+    it('searches everywhere again when the same resource is chosen again or the narrowing is cleared', function (): void {
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-58', '585858');
+        $this->createCustomer('Wide Holder', null, '585858');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)->call('scopeTo', 'customer')->set('phrase', '585858');
+        expect(array_column($component->get('found')['groups'], 'type'))->toBe(['customer']);
+
+        $component->call('scopeTo', 'customer')->assertSet('scope', null);
+        expect(array_column($component->get('found')['groups'], 'type'))->toBe(['order', 'customer']);
+
+        $component->call('scopeTo', 'order')->call('clearScope')->assertSet('scope', null);
+        expect(array_column($component->get('found')['groups'], 'type'))->toBe(['order', 'customer']);
+    });
+
+    it('leaves out of "Search in" a resource that is not offered there, and still searches it everywhere', function (): void {
+        config(['fixtures.order_offered_as_palette_scope' => false]);
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-60', '606060');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)
+            ->assertSeeHtml('wire:click="scopeTo(\'customer\')"')
+            ->assertDontSeeHtml('wire:click="scopeTo(\'order\')"')
+            ->call('scopeTo', 'order')->assertSet('scope', null)
+            ->set('phrase', '606060');
+
+        expect(array_column($component->get('found')['groups'], 'type'))->toBe(['order']);
+    });
+
+    it('refuses a resource the user may not open', function (): void {
+        $this->signIn(['customers.viewAny', 'customers.update']);
+
+        Livewire::test(RecordPalette::class)->call('scopeTo', 'order')->assertSet('scope', null)
+            ->call('scopeTo', 'no-such-type')->assertSet('scope', null);
+    });
+
+    it('widens to every resource once the user may no longer open the chosen one', function (): void {
+        $this->signIn($this->allAbilities());
+        $this->createOrder('OR-59', '595959');
+        $this->createCustomer('Lost Scope', null, '595959');
+        $this->indexAll();
+
+        $component = Livewire::test(RecordPalette::class)->call('scopeTo', 'order')->set('phrase', '595959');
+
+        $this->signIn(['customers.viewAny', 'customers.update']);
+        $component->set('phrase', '595959 ')->assertSet('scope', null);
+        expect(array_column($component->get('found')['groups'], 'type'))->toBe(['customer']);
+    });
 });

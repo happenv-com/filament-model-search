@@ -10,6 +10,8 @@ return [
         'keybindings' => ['mod+shift+k'],
         'debounce_ms' => 250,
         'per_group' => 5,
+        // How many records the palette shows once it is narrowed to one resource ("Search in").
+        'per_scope' => 20,
         // The translation key of the field's placeholder; null keeps the package's own.
         'placeholder' => null,
     ],

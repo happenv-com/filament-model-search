@@ -88,6 +88,15 @@ it("scope is the resource's global search query", function (): void {
         ->and($binding->scope()->getModel())->toBeInstanceOf(Order::class);
 });
 
+it('offers a resource under "Search in" unless the resource says otherwise', function (): void {
+    expect($this->bindingOf(CustomerSearch::class, CustomerResource::class)->offersScope())->toBeTrue()
+        ->and($this->bindingOf(OrderSearch::class, OrderResource::class)->offersScope())->toBeTrue();
+
+    config(['fixtures.order_offered_as_palette_scope' => false]);
+
+    expect($this->bindingOf(OrderSearch::class, OrderResource::class)->offersScope())->toBeFalse();
+});
+
 it('reads title, icon and sort from the resource at call time', function (): void {
     $binding = $this->bindingOf(OrderSearch::class, OrderResource::class);
     $order = Order::query()->create(['signature' => 'OR2002']);
