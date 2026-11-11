@@ -2,6 +2,26 @@
 
 All notable changes to `filament-model-search` will be documented in this file.
 
+## v0.3.0 - 2026-11-11
+
+### Record palette
+
+- **"Search in" narrows the search to one resource** instead of opening its list: the field shows "Search in: Orders" with a cross, the chosen resource is checked in the list, and choosing it again, the cross or Backspace in an empty field searches everywhere again. Up to `palette.per_scope` records come back (new config key, default 20). The scope is a locked property, accepted only for a resource the user may open, and asked again on every search.
+- **A resource can leave "Search in"** with the optional static `isOfferedAsPaletteScope(): bool` (offered without one). It is still searched everywhere; it only cannot be chosen alone.
+- **The spinner stands where the reset button is** while a search runs, and the button comes back with the answer.
+- **The magnifier** names its term ("Search for “PA5555”"), searches every resource for it (clearing "Search in"), and is not offered when the term is the phrase already searched.
+
+### Other
+
+- The package ships a Laravel Boost skill, `filament-model-search-development` (`resources/boost/skills/`).
+
+### Upgrading
+
+- `ResourceBinding::listUrl()` is removed (nothing read it any more).
+- The `open_list` translation key is gone; `narrow`, `scope`, `clear_scope` and `search_term` are new. Published translations need them.
+
+**Full Changelog**: https://github.com/happenv-com/filament-model-search/compare/v0.2.2...v0.3.0
+
 ## v0.2.2 - 2026-11-10
 
 ### What's Changed
