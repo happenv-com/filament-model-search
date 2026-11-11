@@ -5,6 +5,7 @@ description: >-
   happenv-com/laravel-model-search with happenv-com/filament-model-search. Use when binding a
   resource to a search definition (InteractsWithModelSearch, FilamentModelSearchPlugin::resources(),
   FilamentModelSearch::resource()), calling ->modelSearch() on a Table, Select or SelectFilter,
+  replacing a resource's global search (getGlobalSearchResults, getGlobalSearchEloquentQuery),
   configuring the record palette (rows, related term magnifier, "Search in", trigger, keybindings,
   per_group / per_scope), or testing any of these.
 ---
@@ -51,8 +52,10 @@ final class OrderResource extends Resource
 ```
 
 - A listed resource without the trait, or one that declares its own `getGlobalSearchResults()`, is refused when the panel registers.
-- A resource you cannot edit: `FilamentModelSearch::resource(OrderSearch::class, OrderResource::class)` from a provider's `boot()` (binds on every panel).
-- Access is never decided at registration: `canAccess() && canViewAny()` is asked for the current user on every search. Do not cache it per worker (Octane).
+- A resource you cannot edit: `FilamentModelSearch::resource(OrderSearch::class, OrderResource::class)` from a provider's `boot()` (binds on every panel). The palette, tables and selects use such a binding, but **global search stays Filament's own**: only the trait replaces `getGlobalSearchResults()`.
+- Binding a model to a second resource on an overlapping panel, or a definition to a resource of another model, throws `LogicException`. An unknown definition is not checked at binding; it fails on the first search.
+- Access is never decided at registration: the palette and global search ask `canAccess() && canViewAny()` for the current user on every call (tables and selects rely on the page or form that shows them). Do not cache it per worker (Octane).
+- **`via` fields** (an order found by its customer's e-mail) reach the parent only through the parent resource's scope: bind and list the parent's resource on the same panel, or nothing is found through it — silently. A user who may not open the parent resource finds nothing through it either.
 
 ## Tables, selects and filters
 
@@ -70,11 +73,21 @@ Select::make('customer_id')->relationship('customer', 'name')->searchable()->mod
 SelectFilter::make('customer_id')->relationship('customer', 'name')->searchable()->modelSearch();
 ```
 
-- `modelSearch(?string $searchClass = null, ?array $only = null)`; selects also take `stages: false`.
+- `modelSearch(?string $searchClass = null, ?array $only = null)`; `Select` and `SelectFilter` also take `stages: false` (every stage at once). `$only` restricts the field kinds searched (`only: ['number', 'email']`).
+- A `$searchClass` for another model throws `InvalidArgumentException`; a `Select` / `SelectFilter` without `relationship()` throws `LogicException`. A table whose model has no bound definition and gets no `$searchClass` stays native — `modelSearch()` returns it unchanged.
 - Call it **after** `->query()` / `relationship()` (it needs the model) and **after** `emptyStateHeading()` / `emptyStateDescription()`: a heading set later hides the timed-out, too-broad, rate-limited and index-building states.
 - Until `ModelSearches::isReady(<model>)` the table, select and global search stay native (`ILIKE`). They switch by themselves once the index is ready.
-- The search never leaves the table's own query or the relationship query (its `modifyQueryUsing`).
+- The search never leaves the table's own query or the relationship query (its `modifyQueryUsing`). A custom `select()` on the table query is reset to `<table>.*` for the scope only; the rows shown keep your select.
 - PHPStan: `modelSearch()` is a Filament macro; add `happenv-com/filament-phpstan-macros` as a dev dependency instead of ignoring the error.
+- Selects and global search have no room for a message: a timed-out or refused search shows nothing; found records are shown even when the answer is flagged incomplete.
+
+## Global search
+
+With the trait and the resource listed in the plugin, the index answers inside `getGlobalSearchResults()` once the model is ready:
+
+- Within `getGlobalSearchEloquentQuery()` (scope, soft deletes, tenancy), up to `getGlobalSearchResultsLimit()`, in the core's ranking order, **every stage at once** (`withoutStages()`).
+- `modifyGlobalSearchQuery()` is **not applied** on the index path (it shapes Filament's native `ILIKE` query). Put constraints in `getGlobalSearchEloquentQuery()` or in the core's definition.
+- Titles, urls, details and actions stay the resource's own; a "Matched by" line is added to the details (the value only when the core lets the viewer see it).
 
 ## The record palette
 
@@ -111,7 +124,7 @@ Return `null` (or leave the method out) for no picture or no magnifier. What a r
 
 ## Configuration
 
-`config/filament-model-search.php` (`php artisan vendor:publish --tag=filament-model-search-config`): `palette.enabled`, `palette.trigger`, `palette.keybindings`, `palette.debounce_ms`, `palette.per_group`, `palette.per_scope`, `palette.placeholder` (a translation key), `readiness_cache_seconds`. Texts live under `filament-model-search::` in `en`, `pl` and `de`.
+`config/filament-model-search.php` (`php artisan vendor:publish --tag=filament-model-search-config`): `palette.enabled`, `palette.trigger`, `palette.keybindings`, `palette.debounce_ms`, `palette.per_group`, `palette.per_scope`, `palette.placeholder` (a translation key), `readiness_cache_seconds`. `paletteTrigger()` overrides `palette.trigger`; the palette is offered only when both `palette()` and `palette.enabled` are on. Texts live under `filament-model-search::` in `en`, `pl` and `de` (`--tag=filament-model-search-translations`; v0.3.0 added the `narrow`, `scope`, `clear_scope` and `search_term` keys and removed `open_list`, so republish published translations).
 
 ## Testing
 
@@ -134,7 +147,7 @@ Act as a user who may open the resource, or the group is left out. Tests need Po
 
 ## Do not
 
-- Do not override `getGlobalSearchResults()` on a resource that uses the trait.
+- Do not override `getGlobalSearchResults()` on a resource that uses the trait, and do not rely on `modifyGlobalSearchQuery()` once the index answers.
 - Do not call `->modelSearch()` before the table query or before your own empty state.
 - Do not decide access at boot or remember it between requests.
 - Do not log or report the phrase; the core keeps it out of logs, keep it out of yours.
