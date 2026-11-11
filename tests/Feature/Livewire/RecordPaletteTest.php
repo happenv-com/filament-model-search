@@ -357,12 +357,16 @@ it('binds Enter to the search input only, so links and buttons keep their own', 
         ->and($html)->toContain(e(trans('filament-model-search::record-palette.placeholder')));
 });
 
-it('rejects a client that sets the flags only the server may set', function (string $flag): void {
+it('rejects a client that sets the state only the server may set', function (string $property, bool|string $value): void {
     $this->signIn($this->allAbilities());
     $component = Livewire::test(RecordPalette::class)->set('phrase', 'abc');
 
-    expect(fn () => $component->set($flag, true))->toThrow(Exception::class, "Cannot update locked property: [{$flag}]");
-})->with(['similar', 'everyStage', 'scope']);
+    expect(fn () => $component->set($property, $value))->toThrow(Exception::class, "Cannot update locked property: [{$property}]");
+})->with([
+    ['similar', true],
+    ['everyStage', true],
+    ['scope', 'order'],
+]);
 
 it('starts the stages over with a new phrase', function (): void {
     $this->signIn($this->allAbilities());
