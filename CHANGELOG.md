@@ -2,6 +2,13 @@
 
 All notable changes to `filament-model-search` will be documented in this file.
 
+## Unreleased
+
+### Record palette
+
+- **Rows described with table columns.** A resource names a `SearchResultRow` subclass from the optional static `getGlobalSearchResultRow(): ?string`; its `leading()`, `aboveTitle()`, `besideTitle()`, `belowTitle()` and `trailing()` return Filament columns, `with()` the relations to load once per group. A resource without one renders exactly as before. Interactive columns (editable, `url()`, `action()`) are refused with a `LogicException`.
+- The match line is also dropped when the row's own columns already show its value.
+
 ## v0.3.1 - 2026-11-11
 
 ### What's Changed

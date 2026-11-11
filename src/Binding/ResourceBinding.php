@@ -7,12 +7,16 @@ namespace Happenv\FilamentModelSearch\Binding;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource as FilamentResource;
+use Happenv\FilamentModelSearch\Palette\SearchResultRow;
 use Happenv\FilamentModelSearch\Support\FailureReports;
+use Happenv\FilamentModelSearch\Support\HostScope;
 use Happenv\ModelSearch\Facades\ModelSearches;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use LogicException;
 use Throwable;
 
 /**
@@ -81,6 +85,35 @@ final readonly class ResourceBinding
         $resource = $this->resourceClass;
 
         return $resource::getGlobalSearchEloquentQuery();
+    }
+
+    /**
+     * The records with the given keys that are inside the resource's scope, with what its scope and its palette row
+     * load. The scope is used as a subquery, so an orWhere in it cannot widen the lookup.
+     *
+     * @param  list<string>  $keys
+     * @return EloquentCollection<int, Model>
+     */
+    public function recordsInScope(array $keys): EloquentCollection
+    {
+        $modelClass = $this->modelClass;
+        $model = new $modelClass;
+
+        if ($keys === []) {
+            return $model->newCollection();
+        }
+
+        $scope = $this->scope();
+
+        $records = $model->newQuery()
+            ->whereKey($keys)
+            ->whereIn($model->getQualifiedKeyName(), HostScope::of($scope)->select($model->getQualifiedKeyName()))
+            ->get();
+
+        $records->loadMissing($scope->getEagerLoads());
+        $records->loadMissing($this->paletteRow()?->with() ?? []);
+
+        return $records;
     }
 
     public function title(Model $record): string|Htmlable
@@ -164,6 +197,39 @@ final readonly class ResourceBinding
         $resource = $this->resourceClass;
 
         return ! method_exists($resource, 'isOfferedAsPaletteScope') || $resource::isOfferedAsPaletteScope() === true;
+    }
+
+    /**
+     * How the palette shows the records of the resource: the row class its optional static
+     * `getGlobalSearchResultRow(): ?string` names, resolved through the container. Without one the records look the
+     * way the palette shows them by default.
+     *
+     * @throws LogicException When the class is not a SearchResultRow.
+     */
+    public function paletteRow(): ?SearchResultRow
+    {
+        $resource = $this->resourceClass;
+
+        if (! method_exists($resource, 'getGlobalSearchResultRow')) {
+            return null;
+        }
+
+        $class = $resource::getGlobalSearchResultRow();
+
+        if ($class === null) {
+            return null;
+        }
+
+        if (! is_string($class) || ! is_subclass_of($class, SearchResultRow::class)) {
+            throw new LogicException(sprintf(
+                '[%s::getGlobalSearchResultRow()] returned [%s], which is not a subclass of [%s].',
+                $resource,
+                is_string($class) ? $class : get_debug_type($class),
+                SearchResultRow::class,
+            ));
+        }
+
+        return app($class);
     }
 
     private function optionalString(string $method, Model $record): ?string

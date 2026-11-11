@@ -10,6 +10,9 @@ use Filament\Support\Contracts\ScalableIcon;
 use Filament\Support\Enums\IconSize;
 use Happenv\FilamentModelSearch\Binding\ResourceBinding;
 use Happenv\FilamentModelSearch\Binding\ResourceBindings;
+use Happenv\FilamentModelSearch\Palette\PaletteRowRenderer;
+use Happenv\FilamentModelSearch\Palette\RenderedPaletteRow;
+use Happenv\FilamentModelSearch\Palette\SearchResultRow;
 use Happenv\FilamentModelSearch\Support\HostScope;
 use Happenv\FilamentModelSearch\Support\MatchLine;
 use Happenv\FilamentModelSearch\Support\PhraseKind;
@@ -79,6 +82,15 @@ final class RecordPalette extends Component
         'total' => 0,
         'capacity' => 0,
     ];
+
+    /**
+     * The slots of the rows, rendered from the records themselves: HTML never goes into `found`, which is the
+     * snapshot the browser gets and sends back on every request. Filled by a search; a request that did not search
+     * loads the records again by their keys.
+     *
+     * @var array<string, array<string, RenderedPaletteRow>> By morph alias, then by record key.
+     */
+    private array $renderedRows = [];
 
     public function updatedPhrase(#[\SensitiveParameter] mixed $value = null): void
     {
@@ -192,13 +204,7 @@ final class RecordPalette extends Component
             return;
         }
 
-        // The resource's own scope, as a subquery, so an orWhere in it cannot widen the lookup.
-        $modelClass = $binding->modelClass();
-        $model = new $modelClass;
-        $record = $model->newQuery()
-            ->whereKey($id)
-            ->whereIn($model->getQualifiedKeyName(), HostScope::of($binding->scope())->select($model->getQualifiedKeyName()))
-            ->first();
+        $record = $binding->recordsInScope([$id])->first();
 
         $url = $record instanceof Model ? $binding->url($record) : null;
 
@@ -224,6 +230,7 @@ final class RecordPalette extends Component
 
         return view('filament-model-search::livewire.record-palette', [
             'groups' => $found['groups'],
+            'rows' => $this->rowsOf($found['groups']),
             'welcome' => $isShort ? $this->welcome($choices) : [],
             'scopeLabel' => $scoped instanceof ResourceBinding ? Str::ucfirst($scoped->label()) : null,
             'outcome' => $outcome,
@@ -357,6 +364,8 @@ final class RecordPalette extends Component
 
     private function search(): void
     {
+        $this->renderedRows = [];
+
         $phrase = $this->normalizedPhrase();
 
         if (mb_strlen($phrase) < self::MIN_LENGTH) {
@@ -507,6 +516,15 @@ final class RecordPalette extends Component
 
         $records->loadMissing($binding->scope()->getEagerLoads());
 
+        $row = $binding->paletteRow();
+        $rows = [];
+
+        if ($row instanceof SearchResultRow) {
+            $records->loadMissing($row->with());
+            $rows = new PaletteRowRenderer($binding->resourceClass(), $row)->render($records);
+            $this->renderedRows[$this->alias($binding)] = $rows;
+        }
+
         foreach ($results as $result) {
             $url = $binding->url($result->model);
 
@@ -520,8 +538,16 @@ final class RecordPalette extends Component
 
             $details = $binding->details($result->model);
 
-            // A value the second line already shows needs no line of its own.
-            if ($line !== null && in_array($line[1], array_column($details, 'value'), true)) {
+            $rendered = $rows[(string) $result->model->getKey()] ?? null;
+
+            // A value the row already shows needs no line of its own: the details line, unless the slots replace
+            // it, and whatever the slots say.
+            $detailsShown = ! $rendered instanceof RenderedPaletteRow || $rendered->belowTitle === '';
+
+            if ($line !== null && (
+                ($detailsShown && in_array($line[1], array_column($details, 'value'), true))
+                || ($rendered instanceof RenderedPaletteRow && $rendered->shows($line[1]))
+            )) {
                 $line = null;
             }
 
@@ -552,6 +578,42 @@ final class RecordPalette extends Component
             'icon' => $this->iconName($icon),
             'items' => $items,
         ];
+    }
+
+    /**
+     * The rendered slots of what is on screen, for the resources that describe their rows. A search rendered them
+     * already; any other request loads the records again, inside the scope of their resource and only while the user
+     * may still open it.
+     *
+     * @param  list<PaletteGroup>  $groups
+     * @return array<string, array<string, RenderedPaletteRow>> By morph alias, then by record key.
+     */
+    private function rowsOf(array $groups): array
+    {
+        $rows = [];
+
+        foreach ($groups as $group) {
+            $binding = $this->bindingOfType($group['type']);
+            $row = $binding?->paletteRow();
+
+            if (! $binding instanceof ResourceBinding || ! $row instanceof SearchResultRow || ! $binding->isAccessible()) {
+                continue;
+            }
+
+            $known = $this->renderedRows[$group['type']] ?? [];
+            $missing = array_values(array_filter(
+                array_column($group['items'], 'id'),
+                static fn (string $id): bool => ! isset($known[$id]),
+            ));
+
+            if ($missing !== []) {
+                $known += new PaletteRowRenderer($binding->resourceClass(), $row)->render($binding->recordsInScope($missing));
+            }
+
+            $rows[$group['type']] = $known;
+        }
+
+        return $rows;
     }
 
     /**

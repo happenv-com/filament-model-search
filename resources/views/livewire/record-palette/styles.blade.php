@@ -370,6 +370,122 @@
         }
     }
 
+    /* The slots of a row a resource describes with table columns: the columns keep their own markup, the palette only sets the scale. */
+    .fi-record-palette-row-leading {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 2rem;
+        min-height: 2rem;
+
+        & .fi-ta-col {
+            display: grid;
+            place-items: center;
+        }
+    }
+
+    .fi-record-palette-row-above,
+    .fi-record-palette-row-below {
+        color: var(--gray-500);
+        font-size: 0.75rem;
+        line-height: 1rem;
+
+        &:where(.dark *) {
+            color: var(--gray-400);
+        }
+    }
+
+    .fi-record-palette-row-below {
+        margin-top: 0.0625rem;
+    }
+
+    .fi-record-palette-row-heading {
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+
+        & > .fi-record-palette-row-title {
+            flex: 0 1 auto;
+            min-width: 0;
+        }
+    }
+
+    .fi-record-palette-row-beside {
+        flex: none;
+    }
+
+    .fi-record-palette-row-trailing {
+        flex: none;
+        max-width: 40%;
+        color: var(--gray-500);
+        font-size: 0.75rem;
+        line-height: 1rem;
+        text-align: end;
+
+        &:where(.dark *) {
+            color: var(--gray-400);
+        }
+
+        @media (max-width: 48rem) {
+            flex: 1 0 100%;
+            max-width: none;
+            order: 3;
+            text-align: start;
+        }
+    }
+
+    .fi-record-palette-row-slotted {
+        @media (max-width: 48rem) {
+            flex-wrap: wrap;
+            row-gap: 0.125rem;
+        }
+
+        &:has(> .fi-record-palette-row-leading, > .fi-record-palette-row-icon, > .fi-record-palette-row-image) > .fi-record-palette-row-trailing {
+            @media (max-width: 48rem) {
+                padding-inline-start: 2.75rem;
+            }
+        }
+    }
+
+    .fi-record-palette-row-above,
+    .fi-record-palette-row-beside,
+    .fi-record-palette-row-below,
+    .fi-record-palette-row-trailing {
+        & .fi-ta-col,
+        & .fi-ta-text,
+        & .fi-ta-split,
+        & .fi-ta-stack {
+            min-width: 0;
+        }
+
+        & .fi-ta-text-item {
+            color: inherit;
+            font-size: inherit;
+            line-height: inherit;
+        }
+
+        & .fi-ta-split {
+            align-items: center;
+            gap: 0.25rem 0.5rem;
+        }
+
+        & .fi-ta-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        & .fi-badge {
+            padding-block: 0;
+            font-size: 0.6875rem;
+            line-height: 1.25rem;
+        }
+    }
+
+    .fi-record-palette-row-beside .fi-ta-text-item {
+        font-size: 0.75rem;
+    }
+
     .fi-record-palette-related {
         position: absolute;
         top: 50%;

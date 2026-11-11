@@ -14,6 +14,7 @@ use Happenv\FilamentModelSearch\Tests\Fixtures\Models\Order;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\EditOrder;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ListOrders;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Resources\OrderResource\Pages\ViewOrder;
+use Happenv\FilamentModelSearch\Tests\Fixtures\Rows\ConfiguredOrderRow;
 use Happenv\FilamentModelSearch\Tests\Fixtures\Searches\OrderSearch;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,6 +45,21 @@ final class OrderResource extends Resource
         return config('fixtures.order_details_customer') === true
             ? ['Customer' => (string) $record->customer?->name]
             : [];
+    }
+
+    /**
+     * Tests describe the row through `fixtures.order_row` (see ConfiguredOrderRow); `fixtures.order_row_class`
+     * replaces the class, and `false` there leaves the method returning null.
+     */
+    public static function getGlobalSearchResultRow(): ?string
+    {
+        $class = config('fixtures.order_row_class');
+
+        if ($class === false) {
+            return null;
+        }
+
+        return is_string($class) ? $class : (config('fixtures.order_row') === null ? null : ConfiguredOrderRow::class);
     }
 
     /**

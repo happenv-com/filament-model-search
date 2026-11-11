@@ -30,6 +30,7 @@ beforeEach(function (): void {
         'fixtures.order_image' => null,
         'fixtures.order_related_term' => null,
         'fixtures.order_offered_as_palette_scope' => null,
+        'fixtures.order_row' => null,
     ]);
 });
 

@@ -296,6 +296,7 @@
 
                         <div class="fi-record-palette-rows">
                             @foreach ($group['items'] as $item)
+                                @php($slots = $rows[$group['type']][$item['id']] ?? null)
                                 <div wire:key="item-{{ $group['type'] }}-{{ $item['id'] }}" class="fi-record-palette-row-ctn">
                                     <a
                                         id="filament-model-search-palette-option-{{ $group['type'] }}-{{ $item['id'] }}"
@@ -308,18 +309,33 @@
                                         x-on:mousemove="if (activeId !== $el.id) activeId = $el.id"
                                         x-bind:aria-selected="activeId === $el.id ? 'true' : 'false'"
                                         x-bind:class="{ 'fi-selected': activeId === $el.id }"
-                                        class="fi-record-palette-row"
+                                        @class(['fi-record-palette-row', 'fi-record-palette-row-slotted' => $slots !== null && ! $slots->isEmpty()])
                                     >
-                                        @if ($item['image'])
+                                        @if ($slots !== null && $slots->leading !== '')
+                                            <span class="fi-record-palette-row-leading">{!! $slots->leading !!}</span>
+                                        @elseif ($item['image'])
                                             <img src="{{ $item['image'] }}" alt="" loading="lazy" class="fi-record-palette-row-image" />
                                         @elseif ($group['icon'])
                                             <x-filament::icon :icon="$group['icon']" class="fi-record-palette-row-icon" />
                                         @endif
 
                                         <span class="fi-record-palette-row-main">
-                                            <span class="fi-record-palette-row-title" style="display: block">{{ $item['title'] }}</span>
+                                            @if ($slots !== null && $slots->aboveTitle !== '')
+                                                <span class="fi-record-palette-row-above" style="display: block">{!! $slots->aboveTitle !!}</span>
+                                            @endif
 
-                                            @if ($item['details'] !== [])
+                                            @if ($slots !== null && $slots->besideTitle !== '')
+                                                <span class="fi-record-palette-row-heading" style="display: flex">
+                                                    <span class="fi-record-palette-row-title">{{ $item['title'] }}</span>
+                                                    <span class="fi-record-palette-row-beside">{!! $slots->besideTitle !!}</span>
+                                                </span>
+                                            @else
+                                                <span class="fi-record-palette-row-title" style="display: block">{{ $item['title'] }}</span>
+                                            @endif
+
+                                            @if ($slots !== null && $slots->belowTitle !== '')
+                                                <span class="fi-record-palette-row-below" style="display: block">{!! $slots->belowTitle !!}</span>
+                                            @elseif ($item['details'] !== [])
                                                 <span class="fi-record-palette-row-details" style="display: block">
                                                     @foreach ($item['details'] as $detail)
                                                         <b>{{ $detail['label'] }}:</b> {{ $detail['value'] }}@if (! $loop->last) · @endif
@@ -327,6 +343,10 @@
                                                 </span>
                                             @endif
                                         </span>
+
+                                        @if ($slots !== null && $slots->trailing !== '')
+                                            <span class="fi-record-palette-row-trailing">{!! $slots->trailing !!}</span>
+                                        @endif
 
                                         @if ($item['hint'])
                                             <span class="fi-record-palette-row-hint" title="{{ $item['hint']['label'] }}: {{ $item['hint']['value'] }}">{{ $item['hint']['label'] }}: {{ $item['hint']['value'] }}</span>
